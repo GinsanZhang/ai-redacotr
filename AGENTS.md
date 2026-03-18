@@ -146,6 +146,29 @@ class Worker(QThread):
 
 ---
 
+## 团队信息
+
+### 角色定义
+- **产品经理**: Ginsan
+- **研发Agent**: Joker (我)
+
+### 提交规范
+每次Git提交都需要在commit message中备注提交人：
+```
+[提交类型]: [描述]
+
+Author: [Ginsan|Joker]
+```
+
+示例：
+```
+Feat: Add manual recognition button
+
+Author: Joker
+```
+
+---
+
 ## 研发工作流程
 
 ### 流程概览
