@@ -123,6 +123,14 @@ class MainWindow(QMainWindow):
         self.btn_copy.clicked.connect(self.copy_to_clipboard)
         layout.addWidget(self.btn_copy)
         
+        layout.addSpacing(16)
+        
+        self.btn_recognize = QPushButton("🔍  开始识别")
+        self.btn_recognize.setObjectName("btnRecognize")
+        self.btn_recognize.setEnabled(False)
+        self.btn_recognize.clicked.connect(self._start_recognition)
+        layout.addWidget(self.btn_recognize)
+        
         return bar
 
     def _make_right_panel(self):
@@ -215,14 +223,30 @@ class MainWindow(QMainWindow):
             if img is not None: self._process_image(img)
 
     def _process_image(self, image_cv):
-        from .ui import ProcessWorker
         self.current_cv = image_cv
+        self.btn_save.setEnabled(False)
+        self.btn_copy.setEnabled(False)
+        self.canvas.clear_all()
+        self.canvas.load_image(image_cv, [])
+        self.stats_label.setText("已加载图片，点击「开始识别」进行识别")
+        self.progress_label.setText("等待识别")
+        self.progress_bar.setValue(0)
+        self.timing_label.setText("阶段耗时：-")
+        self.btn_recognize.setEnabled(True)
+        self.btn_recognize.setText("🔍  开始识别")
+        self.status.showMessage("图片已加载，点击「开始识别」进行识别")
+
+    def _start_recognition(self):
+        if self.current_cv is None:
+            return
+        from .ui import ProcessWorker
+        self.btn_recognize.setEnabled(False)
+        self.btn_recognize.setText("识别中...")
         self.btn_save.setEnabled(False)
         self.btn_copy.setEnabled(False)
         self.stats_label.setText("处理中...")
         self.progress_bar.setValue(0)
-        self.canvas.load_image(image_cv, [])
-        self.worker = ProcessWorker(image_cv)
+        self.worker = ProcessWorker(self.current_cv)
         self.worker.signals.progress.connect(self.progress_label.setText)
         self.worker.signals.progress_value.connect(self.progress_bar.setValue)
         self.worker.signals.finished.connect(self._on_process_finished)
@@ -233,6 +257,8 @@ class MainWindow(QMainWindow):
         self.canvas.load_image(self.current_cv, hits)
         self.btn_save.setEnabled(True)
         self.btn_copy.setEnabled(True)
+        self.btn_recognize.setEnabled(True)
+        self.btn_recognize.setText("🔍  重新识别")
         self.progress_bar.setValue(100)
         self.progress_label.setText("处理完成")
         self.stats_label.setText(f"文字块: {len(ocr)}\n命中: {len(hits)}\n合计打码: {len(hits)}")
@@ -242,6 +268,8 @@ class MainWindow(QMainWindow):
     def _on_process_error(self, msg):
         self.btn_save.setEnabled(False)
         self.btn_copy.setEnabled(False)
+        self.btn_recognize.setEnabled(True)
+        self.btn_recognize.setText("🔍  重新识别")
         self.progress_bar.setValue(0)
         self.progress_label.setText("处理失败")
         self.stats_label.setText("识别失败，请检查 Key、网络或服务权限")

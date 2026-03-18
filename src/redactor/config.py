@@ -33,7 +33,7 @@ PATTERNS = {
     "IP地址":         r"\b(?:\d{1,3}\.){3}\d{1,3}\b",
     "统一社会信用代码": r"[0-9A-HJ-NP-RT-Y]{18}",
     "护照":           r"[EeGg]\d{8}",
-    "车牌":           r"[京津沪渝冀豫云辽黑湘皖鲁新苏浙赣鄂桂甘晋蒙陕吉闽贵粤川青藏琼宁夏][A-Z][A-HJ-NP-Z0-9]{5,6}",
+    "车牌":           r"[京津沪渝冀豫云辽黑湘皖鲁新苏浙赣鄂桂甘晋蒙陕吉闽贵粤青藏琼宁夏][A-Z][A-HJ-NP-Z0-9]{5,6}",
 }
 
 # UI 样式表
@@ -129,6 +129,16 @@ QPushButton#btnSuccess {
 }
 QPushButton#btnSuccess:hover { background: #065f46; }
 QPushButton#btnSuccess:disabled { background: #1a2020; color: #2d4a3a; border-color: #1a2020; }
+QPushButton#btnRecognize {
+    background: #1e3a5f;
+    color: #60a5fa;
+    border: 1px solid #3b82f6;
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-weight: 600;
+}
+QPushButton#btnRecognize:hover { background: #2563eb; color: white; }
+QPushButton#btnRecognize:disabled { background: #1a2020; color: #4a5568; border-color: #2d3148; }
 QComboBox#combo {
     background: #1e2030;
     color: #94a3b8;
