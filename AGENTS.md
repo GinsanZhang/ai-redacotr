@@ -1,93 +1,105 @@
-# AGENTS.md - Coding Guidelines for This Repository
+# AGENTS.md - 项目编码规范与工作指南
 
-## Project Overview
-This is a Python-based screenshot redaction tool with GUI using PyQt6. It's a standalone desktop application.
+## 项目概述
 
-## Build/Run Commands
+这是一个基于 PyQt6 的桌面截图打码工具，采用云端视觉模型（SiliconFlow Qwen-VL）进行高精度 OCR 识别和隐私信息检测。
+
+**技术栈**: Python + PyQt6 + OpenCV + 云端多模态大模型
+
+---
+
+## 构建与运行命令
 
 ```bash
-# Install dependencies
-pip install PyQt6 paddleocr paddlepaddle pillow opencv-python requests keyboard pyperclip
+# 安装依赖
+pip install PyQt6 pillow opencv-python requests keyboard pyperclip
 
-# Run the application
-python redactor.py
+# 运行应用程序
+python -m src.redactor
 
-# Run with high DPI support (Windows)
-# Add at the start of the script:
-# import ctypes
-# ctypes.windll.shcore.SetProcessDpiAwareness(2)
+# 或使用入口脚本
+python src/redactor/__main__.py
+
+# Windows 高 DPI 支持（已内置在代码中，无需手动添加）
 ```
 
-## Code Style Guidelines
+---
 
-### Python Style
-- **Line length**: Follow natural breaks, no strict limit
-- **Quotes**: Double quotes for docstrings/strings, single quotes acceptable for internal use
-- **Indentation**: 4 spaces
-- **Trailing commas**: Use in multi-line data structures
+## 代码风格规范
 
-### Naming Conventions
-- **Classes**: `PascalCase` (e.g., `MainWindow`, `ProcessWorker`)
-- **Functions/Methods**: `snake_case` (e.g., `detect_by_rules`, `apply_mosaic`)
-- **Variables**: `snake_case` (e.g., `mosaic_strength`, `ocr_blocks`)
-- **Constants**: UPPER_CASE for module-level constants (e.g., `PATTERNS`, `CONFIG`)
-- **Private**: Prefix with underscore (e.g., `_instance`, `_setup_ui`)
+### Python 代码风格
+- **行长度**: 遵循自然断行，无严格限制
+- **引号**: 文档字符串和字符串使用双引号，内部使用可使用单引号
+- **缩进**: 4 个空格
+- **尾随逗号**: 在多行数据结构中使用
 
-### Type Hints
-- Use type hints for function parameters and returns
-- Example: `def recognize(cls, image: np.ndarray) -> list:`
-- Optional types: `Optional[np.ndarray]`, `Optional[int]`
-- Import from `typing`: `Optional`, `List`, `Dict` as needed
+### 命名规范
+- **类名**: `PascalCase`（如 `MainWindow`、`ProcessWorker`）
+- **函数/方法**: `snake_case`（如 `detect_by_rules`、`apply_mosaic`）
+- **变量**: `snake_case`（如 `mosaic_strength`、`ocr_blocks`）
+- **常量**: 模块级常量使用大写（如 `PATTERNS`、`CONFIG`）
+- **私有成员**: 以下划线开头（如 `_instance`、`_setup_ui`）
 
-### Imports Organization
-1. Standard library (sys, re, json, time, threading, etc.)
-2. Third-party (cv2, numpy, requests, PIL, PyQt6)
-3. Local modules (if any)
-4. Blank line between groups
+### 类型提示
+- 为函数参数和返回值使用类型提示
+- 示例: `def recognize(cls, image: np.ndarray) -> list:`
+- 可选类型: `Optional[np.ndarray]`、`Optional[int]`
+- 从 `typing` 导入: `Optional`、`List`、`Dict` 等
 
-### Documentation
-- Use triple-quoted docstrings for modules and classes
-- Brief comments for complex logic
-- Chinese comments acceptable for Chinese UI text
+### 导入组织
+1. 标准库（sys, re, json, time, threading 等）
+2. 第三方库（cv2, numpy, requests, PIL, PyQt6）
+3. 本地模块（如有）
+4. 组之间用空行分隔
 
-### Error Handling
-- Use try-except with specific exceptions when possible
-- Log errors with `print()` for visibility
-- Use `traceback.format_exc()` for full stack traces in worker threads
-- Graceful degradation (app continues even if AI fails)
+### 文档规范
+- 模块和类使用三引号文档字符串
+- 复杂逻辑添加简要注释
+- 中文注释可用于中文 UI 文本
 
-### Qt-specific Conventions
-- Signals: Define in separate `QObject` class (e.g., `ProcessSignals`)
-- UI elements: Use `setObjectName()` for styling
-- Stylesheet: Define large stylesheets as module-level constants
-- Threading: Use `QThread` for background processing
+### 错误处理
+- 尽可能使用 try-except 捕获特定异常
+- 使用 `print()` 记录错误以便可见
+- 在工作线程中使用 `traceback.format_exc()` 获取完整堆栈跟踪
+- 优雅降级（即使 AI 失败，应用程序也能继续运行）
 
-### Configuration
-- Store config in module-level `CONFIG` dict
-- Support both rule-based and AI-based detection
-- Make AI features optional (graceful fallback)
+### Qt 特定规范
+- 信号: 在单独的 `QObject` 类中定义（如 `ProcessSignals`）
+- UI 元素: 使用 `setObjectName()` 进行样式设置
+- 样式表: 将大型样式表定义为模块级常量
+- 线程: 使用 `QThread` 进行后台处理
 
-## Testing
-No formal test suite exists. Test manually:
-1. Run `python redactor.py`
-2. Test screenshot capture (Ctrl+Shift+S)
-3. Verify OCR works with sample images
-4. Check all three mosaic styles (blur/pixel/block)
+### 配置规范
+- 将配置存储在模块级 `CONFIG` 字典中
+- 同时支持基于规则和基于 AI 的检测
+- 使 AI 功能可选（优雅降级）
 
-## Common Patterns
+---
 
-### Singleton Pattern for OCR
+## 测试方法
+
+目前没有正式的测试套件，需手动测试：
+1. 运行 `python -m src.redactor`
+2. 测试截图功能（Ctrl+Shift+S）
+3. 验证 OCR 在样本图片上正常工作
+4. 检查所有三种打码样式（模糊/像素/纯色块）
+
+---
+
+## 常用模式
+
+### 单例模式（用于 OCR）
 ```python
 class OCREngine:
     _instance = None
     @classmethod
     def get(cls):
         if cls._instance is None:
-            # Initialize
+            # 初始化
         return cls._instance
 ```
 
-### Worker Thread Pattern
+### 工作线程模式
 ```python
 class Worker(QThread):
     def __init__(self, ...):
@@ -96,81 +108,90 @@ class Worker(QThread):
     
     def run(self):
         try:
-            # Do work
+            # 执行工作
             self.signals.finished.emit(result)
         except Exception as e:
             self.signals.error.emit(str(e))
 ```
 
-## Dependencies
-- PyQt6: GUI framework
-- paddleocr/paddlepaddle: OCR engine
-- pillow/PIL: Image manipulation
-- opencv-python (cv2): Image processing
-- requests: HTTP for AI API
-- keyboard: Global hotkeys
-- pyperclip: Clipboard operations
+---
 
-## Important Notes
-- First run downloads PaddleOCR models (~500MB)
-- Windows-specific: Uses ctypes for DPI awareness
-- AI features require API key in CONFIG
-- No formal CI/CD or linting setup exists
+## 项目依赖
 
-## python path
-
-"D:\ProgramData\anaconda3\python.exe"
+- **PyQt6**: GUI 框架
+- **pillow/PIL**: 图像处理
+- **opencv-python (cv2)**: 图像处理
+- **requests**: AI API 的 HTTP 请求
+- **keyboard**: 全局快捷键
+- **pyperclip**: 剪贴板操作
 
 ---
 
-## Development Workflow (研发流程)
+## 重要说明
 
-### Workflow Overview
+- **云端识别**: 使用 SiliconFlow API，无需本地部署 OCR 模型
+- **API Key**: AI 功能需要在 CONFIG 中配置 API 密钥或通过环境变量设置
+- **Windows 特定**: 使用 Qt6 内置机制支持高 DPI 屏幕
+- **无 CI/CD**: 目前没有正式的 CI/CD 或代码检查设置
 
-This project follows a structured R&D workflow with 5 checkpoints. As an AI assistant, I must follow this workflow when handling requirements.
+---
+
+## Python 路径
+
+```
+"D:\ProgramData\anaconda3\python.exe"
+```
+
+---
+
+## 研发工作流程
+
+### 流程概览
+
+本项目遵循结构化的研发流程，包含 5 个检查点。作为 AI 助手，我必须在处理需求时遵循此流程。
 
 ```
 需求提出 → 需求确认[CP1] → 需求分析 → 设计阶段[CP2] → 开发阶段[CP3] → 测试阶段[CP4] → 验收通过[CP5] → 已关闭
 ```
 
-### My Responsibilities as AI Assistant
+### AI 助手职责
 
-1. **Record Requirements**: When user proposes a requirement/defect, record it in docs/requirements-pool.md
-2. **Manage Status**: Track requirement status (proposed/analyzing/designing/developing/testing/accepted/closed)
-3. **Checkpoint Confirmation**: Always get user confirmation at each checkpoint before proceeding
-4. **Documentation**: Create all design documents (PRD, UI, Architecture, Detail) before development
-5. **Testing**: Perform self-testing and prepare test reports
-6. **Version Control**: All feature documents go under docs/features/FEATURE-XXX/
+1. **记录需求**: 当用户提出需求/缺陷时，记录在 `docs/requirements-pool.md`
+2. **管理状态**: 跟踪需求状态（提出/分析中/设计中/开发中/测试中/已验收/已关闭）
+3. **检查点确认**: 在每个检查点前始终获得用户确认后再继续
+4. **文档编写**: 在开发前创建所有设计文档（PRD、UI、架构、详细设计）
+5. **测试执行**: 执行自测并准备测试报告
+6. **版本控制**: 所有功能文档放在 `docs/features/FEATURE-XXX/` 下
 
-### Checkpoints (检查点)
+### 检查点（Checkpoint）
 
-| Checkpoint | Stage | My Action | User Action | Output |
-|------------|-------|-----------|-------------|--------|
-| **CP1** | 需求确认 | Clarify requirements, confirm understanding | Confirm or correct | 需求澄清记录 |
-| **CP2** | 设计完成 | Create PRD, UI, Architecture, Detail docs | Review and approve | 设计文档集 |
-| **CP3** | 开发完成 | Implement code, self-test | Verify demo | 代码+自测报告 |
-| **CP4** | 测试完成 | Create test cases and report | Review test report | 测试报告 |
-| **CP5** | 验收通过 | Prepare acceptance report | Sign off | 验收报告 |
+| 检查点 | 阶段 | 我的行动 | 用户行动 | 输出 |
+|--------|------|----------|----------|------|
+| **CP1** | 需求确认 | 澄清需求，确认理解 | 确认或纠正 | 需求澄清记录 |
+| **CP2** | 设计完成 | 创建 PRD、UI、架构、详细设计文档 | 评审并批准 | 设计文档集 |
+| **CP3** | 开发完成 | 实现代码，自测 | 验证演示 | 代码+自测报告 |
+| **CP4** | 测试完成 | 创建测试用例和报告 | 评审测试报告 | 测试报告 |
+| **CP5** | 验收通过 | 准备验收报告 | 签字确认 | 验收报告 |
 
-### Requirement Grading (需求分级)
+### 需求分级
 
-- **P0**: Core features - Must implement (e.g., screenshot, OCR)
-- **P1**: Important features - Should implement (e.g., AI recognition)
-- **P2**: Nice to have - Implement if time permits (e.g., animations)
+- **P0**: 核心功能 - 必须实现（如截图、OCR）
+- **P1**: 重要功能 - 应该实现（如 AI 识别）
+- **P2**: 优化项 - 有时间再实现（如动画效果）
 
-### Directory Structure for Features
+### 功能特性目录结构
 
 ```
 docs/features/FEATURE-XXX-功能名/
-├── 01-需求文档.md    # Requirement analysis
-├── 02-设计文档.md    # Design docs (UI/Architecture/Detail)
-├── 03-测试报告.md    # Test report
-└── 04-验收报告.md    # Acceptance report
+├── 01-需求文档.md    # 需求分析
+├── 02-设计文档.md    # 设计文档（UI/架构/详细设计）
+├── 03-测试报告.md    # 测试报告
+└── 04-验收报告.md    # 验收报告
 ```
 
-### Communication Protocol
+### 沟通协议
 
-**Requesting Checkpoint Confirmation**:
+**申请检查点确认**:
 ```
 【检查点X申请】
 需求: FEATURE-XXX-功能名
@@ -180,20 +201,20 @@ docs/features/FEATURE-XXX-功能名/
 请评审，确认通过请回复"CPX通过"，有问题请指出。
 ```
 
-**Checkpoint Passed**: User replies "CPX通过"
+**检查点通过**: 用户回复 "CPX通过"
 
-**Checkpoint Failed**: User replies with modifications needed
+**检查点失败**: 用户回复需要修改的内容
 
-### Key Rules
+### 关键规则
 
-1. **No development before design docs are approved** (CP2)
-2. **No testing before code self-test passes** (CP3)
-3. **No acceptance before test report is reviewed** (CP4)
-4. **All documents must be version controlled** under docs/
-5. **Update real-time architecture doc** after feature completion
-6. **Use Chinese for all documentation** (as per project convention)
+1. **设计文档批准前不得开发** (CP2)
+2. **代码自测通过前不得测试** (CP3)
+3. **测试报告评审前不得验收** (CP4)
+4. **所有文档必须在 docs/ 下版本控制**
+5. **功能完成后更新实时架构文档**
+6. **所有文档使用中文**（根据项目约定）
 
-### Document Templates
+### 文档模板
 
 **01-需求文档.md**:
 - 原始需求描述
@@ -203,14 +224,14 @@ docs/features/FEATURE-XXX-功能名/
 - 优先级（P0/P1/P2）
 
 **02-设计文档.md**:
-- UI设计（界面、交互）
+- UI 设计（界面、交互）
 - 架构设计（模块、接口）
 - 详细设计（数据结构、算法）
 
 **03-测试报告.md**:
 - 测试用例
 - 测试结果
-- Bug修复记录
+- Bug 修复记录
 
 **04-验收报告.md**:
 - 功能演示说明
@@ -219,71 +240,73 @@ docs/features/FEATURE-XXX-功能名/
 
 ---
 
-## External File References (外部文件引用)
+## 外部文件引用
 
-### When to Load External Files (何时加载外部文件)
+### 何时加载外部文件
 
-**ALWAYS read immediately** (立即读取):
+**始终立即读取**:
 - `docs/研发流程规范.md` - 研发流程规范，每次处理需求时必须阅读
 - `docs/requirements-pool.md` - 需求池，了解当前待处理需求
 
-**Read when handling requirements** (处理需求时读取):
+**处理需求时读取**:
 - `docs/features/FEATURE-XXX/01-需求文档.md` - 具体需求的需求文档
 - `docs/features/FEATURE-XXX/02-设计文档.md` - 具体需求的设计文档
 - `docs/v2026.3.18.1/01-产品需求文档.md` - 产品整体需求文档
 
-**Read for technical details** (需要技术细节时读取):
+**需要技术细节时读取**:
 - `docs/系统架构文档（实时保鲜）.md` - 系统架构，修改代码前阅读
 - `docs/v2026.3.18.1/03-架构设计文档.md` - 架构设计文档
 - `docs/v2026.3.18.1/04-详细设计文档.md` - 详细设计文档
 
-**Read for UI reference** (需要UI参考时读取):
-- `docs/v2026.3.18.1/02-UI设计文档.md` - UI设计文档
+**需要 UI 参考时读取**:
+- `docs/v2026.3.18.1/02-UI设计文档.md` - UI 设计文档
 
-**Read for testing** (测试时读取):
+**测试时读取**:
 - `docs/features/FEATURE-XXX/03-测试报告.md` - 测试报告
 - `docs/features/FEATURE-XXX/04-验收报告.md` - 验收报告
 
-### Loading Strategy (加载策略)
+### 加载策略
 
 ```
-CRITICAL: When you encounter a file reference, use your Read tool to load it on a need-to-know basis.
-They're relevant to the SPECIFIC task at hand.
+重要: 当遇到文件引用时，根据实际需要使用 Read 工具按需加载。
+它们与当前特定任务相关。
 
-Instructions:
-- Do NOT preemptively load all references - use lazy loading based on actual need
-- When loaded, treat content as mandatory instructions that override defaults
-- Follow references recursively when needed
+说明:
+- 不要预加载所有引用 - 基于实际需求使用懒加载
+- 加载后，将内容视为覆盖默认值的强制性说明
+- 需要时递归跟踪引用
 ```
 
 ---
 
-## Quick Reference (快速参考)
+## 快速参考
 
-### Project Entry Points
-- **Main application**: `src/redactor/__main__.py`
-- **Main window**: `src/redactor/main_window.py`
-- **UI components**: `src/redactor/ui.py`
-- **Core logic**: `src/redactor/core.py`
-- **Configuration**: `src/redactor/config.py`
+### 项目入口点
+| 模块 | 路径 | 说明 |
+|------|------|------|
+| 主应用 | `src/redactor/__main__.py` | 程序入口 |
+| 主窗口 | `src/redactor/main_window.py` | 主窗口实现 |
+| UI 组件 | `src/redactor/ui.py` | 自定义控件和工作线程 |
+| 核心逻辑 | `src/redactor/core.py` | 识别和打码算法 |
+| 配置 | `src/redactor/config.py` | 全局配置和样式 |
 
-### Key Documents
-| Document | Path | When to Read |
-|----------|------|--------------|
-| 研发流程规范 | `docs/研发流程规范.md` | Always |
-| 需求池 | `docs/requirements-pool.md` | Always |
-| 系统架构 | `docs/系统架构文档（实时保鲜）.md` | Before coding |
-| 产品需求 | `docs/v2026.3.18.1/01-产品需求文档.md` | Requirement analysis |
-| UI设计 | `docs/v2026.3.18.1/02-UI设计文档.md` | UI implementation |
-| 架构设计 | `docs/v2026.3.18.1/03-架构设计文档.md` | Architecture decisions |
-| 详细设计 | `docs/v2026.3.18.1/04-详细设计文档.md` | Implementation details |
+### 关键文档
+| 文档 | 路径 | 何时阅读 |
+|------|------|----------|
+| 研发流程规范 | `docs/研发流程规范.md` | 始终 |
+| 需求池 | `docs/requirements-pool.md` | 始终 |
+| 系统架构 | `docs/系统架构文档（实时保鲜）.md` | 编码前 |
+| 产品需求 | `docs/v2026.3.18.1/01-产品需求文档.md` | 需求分析时 |
+| UI 设计 | `docs/v2026.3.18.1/02-UI设计文档.md` | UI 实现时 |
+| 架构设计 | `docs/v2026.3.18.1/03-架构设计文档.md` | 架构决策时 |
+| 详细设计 | `docs/v2026.3.18.1/04-详细设计文档.md` | 实现细节时 |
 
 ---
 
-## Reference Documents
+## 参考文档
 
-- **Workflow Spec**: docs/研发流程规范.md
-- **Requirements Pool**: docs/requirements-pool.md
-- **Active Iteration**: docs/requirements-active.md
-- **Architecture**: docs/系统架构文档（实时保鲜）.md
-- **Baseline**: docs/v2026.3.18.1/
+- **研发流程规范**: docs/研发流程规范.md
+- **需求池**: docs/requirements-pool.md
+- **当前迭代**: docs/requirements-active.md
+- **系统架构**: docs/系统架构文档（实时保鲜）.md
+- **版本基线**: docs/v2026.3.18.1/
