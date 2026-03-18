@@ -205,7 +205,20 @@ class ScreenshotSelector(QWidget):
             x1, y1 = min(self.drag_start.x(), end.x()), min(self.drag_start.y(), end.y())
             x2, y2 = max(self.drag_start.x(), end.x()), max(self.drag_start.y(), end.y())
             self.close()
-            if (x2 - x1) > 10 and (y2 - y1) > 10: self.captured.emit(self.full_screenshot.crop((x1, y1, x2, y2)))
-            else: self.captured.emit(self.full_screenshot)
+            
+            # 处理 High DPI 屏幕下的坐标缩放
+            # ImageGrab.grab() 返回的是物理像素，而 Qt 坐标是逻辑像素
+            try:
+                dpr = QApplication.primaryScreen().devicePixelRatio()
+            except:
+                dpr = 1.0
+                
+            px1, py1 = int(x1 * dpr), int(y1 * dpr)
+            px2, py2 = int(x2 * dpr), int(y2 * dpr)
+            
+            if (px2 - px1) > 10 and (py2 - py1) > 10:
+                self.captured.emit(self.full_screenshot.crop((px1, py1, px2, py2)))
+            else:
+                self.captured.emit(self.full_screenshot)
     def keyPressEvent(self, e):
         if e.key() == Qt.Key_Escape: self.close()
