@@ -162,6 +162,16 @@ class MainWindow(QMainWindow):
         self.ai_checkbox.toggled.connect(lambda v: CONFIG.update({"ai_enabled": v}))
         layout.addWidget(self.ai_checkbox)
         
+        self.deep_ai_checkbox = QCheckBox("启用深度AI识别")
+        self.deep_ai_checkbox.setObjectName("checkbox")
+        self.deep_ai_checkbox.setChecked(CONFIG.get("deep_ai_enabled", False))
+        self.deep_ai_checkbox.setToolTip(
+            "快速模式（推荐）：30-40秒\n"
+            "深度模式：60-80秒，识别更准确"
+        )
+        self.deep_ai_checkbox.toggled.connect(lambda v: CONFIG.update({"deep_ai_enabled": v}))
+        layout.addWidget(self.deep_ai_checkbox)
+        
         layout.addWidget(self._section("处理进度"))
         self.progress_bar = QProgressBar(objectName="progressBar")
         self.progress_bar.setRange(0, 100)

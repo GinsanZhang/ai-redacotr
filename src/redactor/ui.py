@@ -47,32 +47,79 @@ class ProcessWorker(QThread):
     def __init__(self, image_cv: np.ndarray):
         super().__init__()
         self.image_cv, self.signals = image_cv, ProcessSignals()
+
     def run(self):
         try:
-            timings, total_start = {}, time.time()
-            self.signals.progress_value.emit(5)
-            self.signals.progress.emit("云端视觉识别中...")
-            s1 = time.time()
-            ocr = detect_by_cloud_vision(self.image_cv, self.signals.progress.emit)
-            timings["云端视觉"] = time.time() - s1
-            self.signals.progress_value.emit(55)
-            self.signals.progress.emit("规则匹配中...")
-            s2 = time.time()
-            rules = detect_by_rules(ocr)
-            timings["规则匹配"] = time.time() - s2
-            self.signals.progress_value.emit(75)
-            self.signals.progress.emit("AI分析中...")
-            s3 = time.time()
-            rule_texts = {h["text"] for h in rules}
-            rem = [b for b in ocr if b["text"] not in rule_texts]
-            ai = detect_by_ai(rem, self.signals.progress.emit)
-            timings["AI分析"] = time.time() - s3
-            timings["总耗时"] = time.time() - total_start
-            self.signals.progress_value.emit(100)
-            self.signals.progress.emit("处理完成")
-            self.signals.finished.emit(ocr, rules + ai, timings)
+            if CONFIG.get("deep_ai_enabled", False):
+                self._run_deep_mode()
+            else:
+                self._run_fast_mode()
         except Exception as e:
             self.signals.error.emit(str(e))
+
+    def _run_fast_mode(self):
+        """快速模式：云端视觉同时识别文字和敏感信息 + 规则补充"""
+        timings, total_start = {}, time.time()
+        
+        self.signals.progress_value.emit(5)
+        self.signals.progress.emit("云端视觉识别中...")
+        s1 = time.time()
+        result = detect_by_cloud_vision(self.image_cv, self.signals.progress.emit, include_sensitive=True)
+        timings["云端视觉"] = time.time() - s1
+        
+        ocr_blocks = result["ocr_blocks"]
+        sensitive_hits = result["sensitive_hits"]
+        
+        self.signals.progress_value.emit(80)
+        self.signals.progress.emit("规则补充匹配中...")
+        s2 = time.time()
+        
+        # 规则作为补充：检测云端视觉可能遗漏的敏感信息
+        rule_hits = detect_by_rules(ocr_blocks)
+        
+        # 合并结果，去重（根据bbox判断是否为同一区域）
+        existing_bboxes = {tuple(h["bbox"]) for h in sensitive_hits}
+        for hit in rule_hits:
+            bbox_tuple = tuple(hit["bbox"])
+            if bbox_tuple not in existing_bboxes:
+                sensitive_hits.append(hit)
+                existing_bboxes.add(bbox_tuple)
+        
+        timings["规则匹配"] = time.time() - s2
+        timings["总耗时"] = time.time() - total_start
+        
+        self.signals.progress_value.emit(100)
+        self.signals.progress.emit("处理完成")
+        self.signals.finished.emit(ocr_blocks, sensitive_hits, timings)
+
+    def _run_deep_mode(self):
+        """深度模式：OCR → 规则 → AI语义分析（原始流程）"""
+        timings, total_start = {}, time.time()
+        
+        self.signals.progress_value.emit(5)
+        self.signals.progress.emit("云端视觉识别中...")
+        s1 = time.time()
+        ocr = detect_by_cloud_vision(self.image_cv, self.signals.progress.emit)
+        timings["云端视觉"] = time.time() - s1
+        
+        self.signals.progress_value.emit(40)
+        self.signals.progress.emit("规则匹配中...")
+        s2 = time.time()
+        rules = detect_by_rules(ocr)
+        timings["规则匹配"] = time.time() - s2
+        
+        self.signals.progress_value.emit(50)
+        self.signals.progress.emit("AI深度分析中...")
+        s3 = time.time()
+        rule_texts = {h["text"] for h in rules}
+        rem = [b for b in ocr if b["text"] not in rule_texts]
+        ai = detect_by_ai(rem, self.signals.progress.emit)
+        timings["AI分析"] = time.time() - s3
+        
+        timings["总耗时"] = time.time() - total_start
+        self.signals.progress_value.emit(100)
+        self.signals.progress.emit("处理完成")
+        self.signals.finished.emit(ocr, rules + ai, timings)
 
 class AnnotationCanvas(QLabel):
     regions_changed = pyqtSignal()

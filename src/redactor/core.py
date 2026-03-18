@@ -97,17 +97,62 @@ def detect_by_ai(ocr_blocks: list, progress_cb=None) -> list:
         except Exception as e: dev_log(f"AI分析异常: {e}", "ERROR")
     return []
 
-def detect_by_cloud_vision(image: np.ndarray, progress_cb=None) -> list:
+def detect_by_cloud_vision(image: np.ndarray, progress_cb=None, include_sensitive=False):
+    """
+    使用云端多模态模型进行OCR识别
+    
+    参数:
+        image: OpenCV图像
+        progress_cb: 进度回调函数
+        include_sensitive: 是否同时识别敏感信息，默认False
+    
+    返回:
+        include_sensitive=False时: list - OCR结果列表
+        include_sensitive=True时: dict - {"ocr_blocks": [...], "sensitive_hits": [...]}
+    """
     if not CONFIG["cloud_vision_api_key"]:
         raise RuntimeError("未配置云端视觉 API Key，请设置 LLM_API_KEY 或 CLOUD_VISION_API_KEY")
     h, w = image.shape[:2]
     scale = min(1.0, 1800.0 / max(h, w))
     resized = cv2.resize(image, (int(w * scale), int(h * scale))) if scale < 1.0 else image
     ok, buf = cv2.imencode(".jpg", resized, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
-    if not ok: return []
+    if not ok: 
+        return [] if not include_sensitive else {"ocr_blocks": [], "sensitive_hits": []}
     
     b64 = base64.b64encode(buf.tobytes()).decode("utf-8")
-    prompt = "你是一个高精度的 OCR 助手。请识别图片中所有的文字块。重要：bbox 坐标必须是基于图片尺寸归一化到 [0, 1000] 范围内的整数。格式：{\"blocks\":[{\"text\":\"...\",\"bbox\":[xmin,ymin,xmax,ymax]}]}"
+    
+    # 根据参数选择Prompt
+    if include_sensitive:
+        prompt = """你是一个高精度的 OCR 助手和隐私保护专家。
+
+请识别图片中所有的文字块，并判断哪些是敏感信息。
+
+敏感信息类型包括：
+- 姓名（人名）
+- 详细地址
+- 手机号
+- 身份证号
+- 银行卡号
+- 邮箱
+- 职位/职称
+- 企业名称
+- 其他个人隐私
+
+重要：bbox 坐标必须是基于图片尺寸归一化到 [0, 1000] 范围内的整数。
+
+输出格式：
+{
+  "blocks": [
+    {
+      "text": "识别文字",
+      "bbox": [xmin, ymin, xmax, ymax],
+      "is_sensitive": true/false,
+      "sensitive_type": "姓名/地址/手机号等"
+    }
+  ]
+}"""
+    else:
+        prompt = "你是一个高精度的 OCR 助手。请识别图片中所有的文字块。重要：bbox 坐标必须是基于图片尺寸归一化到 [0, 1000] 范围内的整数。格式：{\"blocks\":[{\"text\":\"...\",\"bbox\":[xmin,ymin,xmax,ymax]}]}"
     
     body = {
         "model": CONFIG["cloud_vision_model"],
@@ -134,16 +179,59 @@ def detect_by_cloud_vision(image: np.ndarray, progress_cb=None) -> list:
     except Exception:
         raise RuntimeError("云端视觉返回格式无法解析，请稍后重试")
     
-    blocks, out = data.get("blocks", []), []
-    for b in blocks:
-        text_raw, bbox = str(b.get("text", "")), b.get("bbox", [])
-        if not text_raw or len(bbox) != 4: continue
-        text = bytes(text_raw, "utf-8").decode("unicode_escape").strip() if "\\u" in text_raw else text_raw.strip()
-        nx1, ny1, nx2, ny2 = [float(v) for v in bbox]
-        x1, y1 = int(nx1 * w / 1000.0), int(ny1 * h / 1000.0)
-        x2, y2 = int(nx2 * w / 1000.0), int(ny2 * h / 1000.0)
-        out.append({"text": text, "bbox": [max(0, x1), max(0, y1), min(w, x2), min(h, y2)], "conf": float(b.get("conf", 1.0))})
-    return out
+    blocks = data.get("blocks", [])
+    
+    if include_sensitive:
+        # 新模式：同时返回OCR结果和敏感信息
+        ocr_blocks = []
+        sensitive_hits = []
+        
+        for b in blocks:
+            text_raw, bbox = str(b.get("text", "")), b.get("bbox", [])
+            if not text_raw or len(bbox) != 4: 
+                continue
+            
+            text = bytes(text_raw, "utf-8").decode("unicode_escape").strip() if "\\u" in text_raw else text_raw.strip()
+            nx1, ny1, nx2, ny2 = [float(v) for v in bbox]
+            x1, y1 = int(nx1 * w / 1000.0), int(ny1 * h / 1000.0)
+            x2, y2 = int(nx2 * w / 1000.0), int(ny2 * h / 1000.0)
+            
+            pixel_bbox = [max(0, x1), max(0, y1), min(w, x2), min(h, y2)]
+            
+            # 添加到OCR结果
+            ocr_blocks.append({
+                "text": text, 
+                "bbox": pixel_bbox, 
+                "conf": float(b.get("conf", 1.0))
+            })
+            
+            # 如果是敏感信息，加入hits
+            if b.get("is_sensitive", False):
+                sensitive_hits.append({
+                    "bbox": pixel_bbox,
+                    "label": b.get("sensitive_type", "敏感信息"),
+                    "text": text,
+                    "source": "ai"
+                })
+        
+        return {"ocr_blocks": ocr_blocks, "sensitive_hits": sensitive_hits}
+    else:
+        # 原模式：仅返回OCR结果
+        out = []
+        for b in blocks:
+            text_raw, bbox = str(b.get("text", "")), b.get("bbox", [])
+            if not text_raw or len(bbox) != 4: 
+                continue
+            text = bytes(text_raw, "utf-8").decode("unicode_escape").strip() if "\\u" in text_raw else text_raw.strip()
+            nx1, ny1, nx2, ny2 = [float(v) for v in bbox]
+            x1, y1 = int(nx1 * w / 1000.0), int(ny1 * h / 1000.0)
+            x2, y2 = int(nx2 * w / 1000.0), int(ny2 * h / 1000.0)
+            out.append({
+                "text": text, 
+                "bbox": [max(0, x1), max(0, y1), min(w, x2), min(h, y2)], 
+                "conf": float(b.get("conf", 1.0))
+            })
+        return out
 
 def apply_mosaic(image: np.ndarray, bbox: list, style: str = "blur", strength: int = 20) -> np.ndarray:
     x1, y1, x2, y2 = bbox

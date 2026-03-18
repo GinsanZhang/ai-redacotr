@@ -18,6 +18,7 @@ CONFIG = {
     "mosaic_style": "blur",   # blur | block | pixel
     "mosaic_strength": 20,    # 马赛克强度
     "ai_enabled": True,       # 是否启用AI识别
+    "deep_ai_enabled": False,  # 是否启用深度AI识别（默认关闭，快速模式）
     "hotkey": "ctrl+shift+s",
     "debug_log": os.getenv("DEBUG_LOG", "1") == "1",
     "debug_log_request_body": os.getenv("DEBUG_LOG_REQUEST_BODY", "1") == "1",
