@@ -1,15 +1,19 @@
 # 截图打码助手 (Screenshot Redactor)
 
-一款基于 PyQt5 和云端视觉模型（SiliconFlow Qwen-VL）的高精度自动截图打码工具。
+一款基于 PyQt6 和云端多模态大模型的高精度自动截图打码工具。
 
 ## ✨ 特性
 
-- **云端识别**: 采用 Qwen-VL-32B-Instruct 大模型，无需本地部署复杂的 OCR 引擎。
-- **高精度打码**: 自动识别 PII（个人身份信息），如姓名、地址、手机号、身份证、银行卡等。
-- **实时预览**: 流式输出模型分析过程，进度条实时反馈。
-- **多种模式**: 支持全局快捷键截图、全屏截图、打开本地图片。
-- **手动修正**: 支持手动添加/删除打码区域，支持撤销操作。
-- **多端分发**: 一键保存图片或复制到剪贴板。
+- **云端识别**: 采用 Qwen-VL-32B-Instruct 大模型进行 OCR，无需本地部署。
+- **双模式识别**: 
+  - **快速模式**（默认）：OCR 同时识别敏感信息，30-60秒完成
+  - **深度模式**：额外进行 AI 语义分析，60-150秒，识别更精准
+- **手动触发**: 截图后不自动识别，用户点击"识别"按钮后才开始，可控更灵活
+- **高精度打码**: 自动识别 PII（个人身份信息），如姓名、地址、手机号、身份证、银行卡等
+- **实时预览**: 流式输出模型分析过程，进度条实时反馈
+- **多种截图**: 支持全局快捷键截图、全屏截图、打开本地图片
+- **手动修正**: 支持手动添加/删除打码区域，支持撤销操作
+- **多端分发**: 一键保存图片或复制到剪贴板
 
 ## 🚀 快速开始
 
@@ -20,26 +24,39 @@
 ```bash
 conda create -n redactor python=3.10
 conda activate redactor
-pip install PyQt5 pillow opencv-python requests keyboard pyperclip
+pip install -r requirements.txt
 ```
 
 ### 2. 配置 API Key
 
-本项目使用 [SiliconFlow](https://siliconflow.cn/) 提供的 API。请在 `redactor.py` 顶部或通过环境变量配置：
+本项目使用 [SiliconFlow](https://siliconflow.cn/) 提供的 API。通过环境变量配置：
 
-```python
-CONFIG = {
-    "llm_api_key": "你的_siliconflow_api_key",
-    # 也可以设置环境变量 LLM_API_KEY
-}
+```bash
+# Windows
+set LLM_API_KEY=your_api_key_here
+
+# Linux/Mac
+export LLM_API_KEY=your_api_key_here
+```
+
+或在项目根目录创建 `.env` 文件：
+
+```
+LLM_API_KEY=your_api_key_here
 ```
 
 ### 3. 运行
 
-直接双击运行 `run.bat` 或在终端执行：
+在项目根目录执行：
 
 ```bash
-python redactor.py
+python -m src.redactor
+```
+
+或使用入口脚本：
+
+```bash
+python src/redactor/__main__.py
 ```
 
 ## ⌨️ 快捷键
@@ -51,12 +68,15 @@ python redactor.py
 
 ## 🛠 技术架构
 
-- **GUI**: PyQt5
-- **视觉模型**: Qwen/Qwen3-VL-32B-Instruct (via SiliconFlow)
-- **逻辑引擎**: 
-  - **规则引擎**: 正则表达式匹配标准格式信息（手机号、身份证等）。
-  - **AI 引擎**: LLM 语义识别非标准隐私信息（姓名、地址等）。
-- **DPI 适配**: 支持 Windows 高 DPI 屏幕 (Per Monitor DPI Aware V2)。
+- **GUI**: PyQt6（支持高 DPI 屏幕）
+- **视觉模型**: 
+  - Qwen/Qwen3-VL-32B-Instruct (via SiliconFlow) - OCR 识别
+  - Pro/moonshotai/Kimi-K2.5 (via SiliconFlow) - AI 语义分析（可选）
+- **识别流程**:
+  - **快速模式**（默认）: OCR 同时识别敏感信息 + 规则补充，30-60秒
+  - **深度模式**（可选）: OCR + 规则 + AI 语义分析，60-150秒
+- **规则引擎**: 正则表达式匹配标准格式信息（手机号、身份证等）
+- **图像处理**: OpenCV + Pillow
 
 ## 📝 开源协议
 
