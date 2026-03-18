@@ -1,0 +1,30 @@
+# 忽略 Python 编译文件
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 忽略环境和库
+.venv/
+env/
+venv/
+ENV/
+.env
+
+# 忽略日志和缓存
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 忽略 IDE 配置文件
+.vscode/
+.idea/
+.trae/
+
+# 忽略系统文件
+Thumbs.db
+Desktop.ini
+
+# 忽略临时数据
+D:/paddlex_models/
+D:/ai/aishortcut/.paddlex/
