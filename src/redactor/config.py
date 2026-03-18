@@ -2,14 +2,15 @@ import os
 import sys
 
 # 基础配置
+_LLM_KEY = os.getenv("LLM_API_KEY", "")
 CONFIG = {
     "llm_api_url": os.getenv("LLM_API_URL", "https://api.siliconflow.cn/v1/chat/completions"),
-    "llm_api_key": os.getenv("LLM_API_KEY", ""),  # 强烈建议通过环境变量 LLM_API_KEY 设置
+    "llm_api_key": _LLM_KEY,  # 强烈建议通过环境变量 LLM_API_KEY 设置
     "llm_model": os.getenv("LLM_MODEL", "Qwen/Qwen3.5-35B-A3B"),
     "llm_timeout": int(os.getenv("LLM_TIMEOUT", "180")),
     "llm_retries": int(os.getenv("LLM_RETRIES", "2")),
     "cloud_vision_api_url": os.getenv("CLOUD_VISION_API_URL", "https://api.siliconflow.cn/v1/chat/completions"),
-    "cloud_vision_api_key": os.getenv("CLOUD_VISION_API_KEY", os.getenv("LLM_API_KEY", "")),
+    "cloud_vision_api_key": os.getenv("CLOUD_VISION_API_KEY", _LLM_KEY),
     "cloud_vision_model": os.getenv("CLOUD_VISION_MODEL", "Qwen/Qwen3-VL-32B-Instruct"),
     "cloud_vision_timeout": int(os.getenv("CLOUD_VISION_TIMEOUT", "180")),
     "cloud_vision_retries": int(os.getenv("CLOUD_VISION_RETRIES", "1")),
