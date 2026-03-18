@@ -219,6 +219,67 @@ docs/features/FEATURE-XXX-功能名/
 
 ---
 
+## External File References (外部文件引用)
+
+### When to Load External Files (何时加载外部文件)
+
+**ALWAYS read immediately** (立即读取):
+- `docs/研发流程规范.md` - 研发流程规范，每次处理需求时必须阅读
+- `docs/requirements-pool.md` - 需求池，了解当前待处理需求
+
+**Read when handling requirements** (处理需求时读取):
+- `docs/features/FEATURE-XXX/01-需求文档.md` - 具体需求的需求文档
+- `docs/features/FEATURE-XXX/02-设计文档.md` - 具体需求的设计文档
+- `docs/v2026.3.18.1/01-产品需求文档.md` - 产品整体需求文档
+
+**Read for technical details** (需要技术细节时读取):
+- `docs/系统架构文档（实时保鲜）.md` - 系统架构，修改代码前阅读
+- `docs/v2026.3.18.1/03-架构设计文档.md` - 架构设计文档
+- `docs/v2026.3.18.1/04-详细设计文档.md` - 详细设计文档
+
+**Read for UI reference** (需要UI参考时读取):
+- `docs/v2026.3.18.1/02-UI设计文档.md` - UI设计文档
+
+**Read for testing** (测试时读取):
+- `docs/features/FEATURE-XXX/03-测试报告.md` - 测试报告
+- `docs/features/FEATURE-XXX/04-验收报告.md` - 验收报告
+
+### Loading Strategy (加载策略)
+
+```
+CRITICAL: When you encounter a file reference, use your Read tool to load it on a need-to-know basis.
+They're relevant to the SPECIFIC task at hand.
+
+Instructions:
+- Do NOT preemptively load all references - use lazy loading based on actual need
+- When loaded, treat content as mandatory instructions that override defaults
+- Follow references recursively when needed
+```
+
+---
+
+## Quick Reference (快速参考)
+
+### Project Entry Points
+- **Main application**: `src/redactor/__main__.py`
+- **Main window**: `src/redactor/main_window.py`
+- **UI components**: `src/redactor/ui.py`
+- **Core logic**: `src/redactor/core.py`
+- **Configuration**: `src/redactor/config.py`
+
+### Key Documents
+| Document | Path | When to Read |
+|----------|------|--------------|
+| 研发流程规范 | `docs/研发流程规范.md` | Always |
+| 需求池 | `docs/requirements-pool.md` | Always |
+| 系统架构 | `docs/系统架构文档（实时保鲜）.md` | Before coding |
+| 产品需求 | `docs/v2026.3.18.1/01-产品需求文档.md` | Requirement analysis |
+| UI设计 | `docs/v2026.3.18.1/02-UI设计文档.md` | UI implementation |
+| 架构设计 | `docs/v2026.3.18.1/03-架构设计文档.md` | Architecture decisions |
+| 详细设计 | `docs/v2026.3.18.1/04-详细设计文档.md` | Implementation details |
+
+---
+
 ## Reference Documents
 
 - **Workflow Spec**: docs/研发流程规范.md
