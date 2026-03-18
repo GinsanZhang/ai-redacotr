@@ -80,6 +80,7 @@ class AnnotationCanvas(QLabel):
         super().__init__()
         self.original_cv, self.display_scale, self.regions = None, 1.0, []
         self.drag_start, self.drag_current, self.hover_region, self.mode = None, None, None, "add"
+        self.image_offset = (0, 0)  # 图片在 QLabel 中的偏移量 (x, y)
         self.setMouseTracking(True)
         self.setCursor(QCursor(CURSOR_CROSS))
         self.setMinimumSize(400, 300)
@@ -103,13 +104,29 @@ class AnnotationCanvas(QLabel):
             img = apply_mosaic(img, r["bbox"], CONFIG["mosaic_style"], CONFIG["mosaic_strength"])
         h, w = img.shape[:2]
         nw, nh = int(w * self.display_scale), int(h * self.display_scale)
-        disp = cv2.resize(img, (nw, nh))
-        rgb = cv2.cvtColor(disp, cv2.COLOR_BGR2RGB)
-        pix = QPixmap.fromImage(QImage(rgb.data, nw, nh, 3 * nw, IMAGE_FORMAT_RGB888))
+        
+        # 计算图片在 QLabel 中的偏移量（居中显示时的偏移）
+        offset_x = max(0, (self.width() - nw) // 2)
+        offset_y = max(0, (self.height() - nh) // 2)
+        self.image_offset = (offset_x, offset_y)
+        
+        # 创建与 QLabel 大小相同的 pixmap，填充背景色
+        pix = QPixmap(self.width(), self.height())
+        pix.fill(GLOBAL_TRANSPARENT)
+        
         ptr = QPainter(pix)
         ptr.setRenderHint(PAINTER_ANTIALIAS)
+        
+        # 绘制缩放后的图片
+        disp = cv2.resize(img, (nw, nh))
+        rgb = cv2.cvtColor(disp, cv2.COLOR_BGR2RGB)
+        img_pix = QPixmap.fromImage(QImage(rgb.data, nw, nh, 3 * nw, IMAGE_FORMAT_RGB888))
+        ptr.drawPixmap(offset_x, offset_y, img_pix)
+        
+        # 绘制区域框（相对于偏移后的位置）
         for i, r in enumerate(self.regions):
-            x1, y1, x2, y2 = [int(c * self.display_scale) for c in r["bbox"]]
+            x1, y1, x2, y2 = [int(c * self.display_scale) + offset_x if j % 2 == 0 else int(c * self.display_scale) + offset_y 
+                              for j, c in enumerate(r["bbox"])]
             col = QColor(255, 80, 80, 180) if r.get("source") != "ai" else QColor(255, 160, 0, 180)
             if i == self.hover_region: col = QColor(255, 50, 50, 220)
             ptr.setPen(QPen(col, 2))
@@ -121,14 +138,17 @@ class AnnotationCanvas(QLabel):
                 ptr.setBrush(QBrush(col))
                 fm = ptr.fontMetrics()
                 tw, th = fm.horizontalAdvance(lbl) + 8, fm.height() + 4
-                ptr.drawRect(x1, max(0, y1 - th), tw, th)
-                ptr.drawText(x1 + 4, max(th, y1) - 3, lbl)
+                ptr.drawRect(x1, max(offset_y, y1 - th), tw, th)
+                ptr.drawText(x1 + 4, max(th + offset_y, y1) - 3, lbl)
+        
+        # 绘制拖拽框
         if self.drag_start and self.drag_current:
             x1, y1 = min(self.drag_start.x(), self.drag_current.x()), min(self.drag_start.y(), self.drag_current.y())
             x2, y2 = max(self.drag_start.x(), self.drag_current.x()), max(self.drag_start.y(), self.drag_current.y())
             ptr.setPen(QPen(QColor(100, 200, 255), 2, PEN_DASH_LINE))
             ptr.setBrush(QBrush(QColor(100, 200, 255, 40)))
             ptr.drawRect(x1, y1, x2 - x1, y2 - y1)
+        
         ptr.end()
         self.setPixmap(pix)
 
@@ -164,14 +184,28 @@ class AnnotationCanvas(QLabel):
             x2, y2 = max(self.drag_start.x(), end.x()), max(self.drag_start.y(), end.y())
             if (x2 - x1) > 5 and (y2 - y1) > 5:
                 s = self.display_scale
-                self.regions.append({"bbox": [int(x1/s), int(y1/s), int(x2/s), int(y2/s)], "label": "手动", "source": "manual"})
+                offset_x, offset_y = self.image_offset
+                # 减去偏移量，转换为相对于图片的坐标，再除以缩放比例得到原图坐标
+                self.regions.append({
+                    "bbox": [
+                        int((x1 - offset_x) / s), 
+                        int((y1 - offset_y) / s), 
+                        int((x2 - offset_x) / s), 
+                        int((y2 - offset_y) / s)
+                    ], 
+                    "label": "手动", 
+                    "source": "manual"
+                })
                 self.regions_changed.emit()
         self.drag_start = self.drag_current = None
         self._render()
 
     def _find_region_at(self, pt):
         s = self.display_scale
-        ox, oy = pt.x() / s, pt.y() / s
+        offset_x, offset_y = self.image_offset
+        # 减去偏移量，再除以缩放比例得到原图坐标
+        ox = (pt.x() - offset_x) / s
+        oy = (pt.y() - offset_y) / s
         for i, r in enumerate(self.regions):
             x1, y1, x2, y2 = r["bbox"]
             if x1 <= ox <= x2 and y1 <= oy <= y2: return i
