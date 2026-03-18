@@ -74,9 +74,9 @@ class MainWindow(QMainWindow):
         layout.addStretch()
         
         for text, func, obj_name in [
-            ("📷  区域截图", self.start_capture, "btnPrimary"),
-            ("🖥  全屏截图", self.capture_fullscreen, "btnSecondary"),
-            ("📁  打开图片", self.open_image, "btnSecondary")
+            ("📷 截图", self.start_capture, "btnPrimary"),
+            ("🖥 全屏", self.capture_fullscreen, "btnSecondary"),
+            ("📁 打开", self.open_image, "btnSecondary")
         ]:
             btn = QPushButton(text)
             btn.setObjectName(obj_name)
@@ -111,7 +111,7 @@ class MainWindow(QMainWindow):
             
         layout.addSpacing(16)
         
-        self.btn_save = QPushButton("💾  保存图片")
+        self.btn_save = QPushButton("💾 保存")
         self.btn_save.setObjectName("btnSuccess")
         self.btn_save.setEnabled(False)
         self.btn_save.clicked.connect(self.save_image)
@@ -125,7 +125,7 @@ class MainWindow(QMainWindow):
         
         layout.addSpacing(16)
         
-        self.btn_recognize = QPushButton("🔍  开始识别")
+        self.btn_recognize = QPushButton("🔍 识别")
         self.btn_recognize.setObjectName("btnRecognize")
         self.btn_recognize.setEnabled(False)
         self.btn_recognize.clicked.connect(self._start_recognition)
@@ -233,7 +233,7 @@ class MainWindow(QMainWindow):
         self.progress_bar.setValue(0)
         self.timing_label.setText("阶段耗时：-")
         self.btn_recognize.setEnabled(True)
-        self.btn_recognize.setText("🔍  开始识别")
+        self.btn_recognize.setText("🔍 识别")
         self.status.showMessage("图片已加载，点击「开始识别」进行识别")
 
     def _start_recognition(self):
@@ -258,7 +258,7 @@ class MainWindow(QMainWindow):
         self.btn_save.setEnabled(True)
         self.btn_copy.setEnabled(True)
         self.btn_recognize.setEnabled(True)
-        self.btn_recognize.setText("🔍  重新识别")
+        self.btn_recognize.setText("🔍 识别")
         self.progress_bar.setValue(100)
         self.progress_label.setText("处理完成")
         self.stats_label.setText(f"文字块: {len(ocr)}\n命中: {len(hits)}\n合计打码: {len(hits)}")
@@ -269,7 +269,7 @@ class MainWindow(QMainWindow):
         self.btn_save.setEnabled(False)
         self.btn_copy.setEnabled(False)
         self.btn_recognize.setEnabled(True)
-        self.btn_recognize.setText("🔍  重新识别")
+        self.btn_recognize.setText("🔍 识别")
         self.progress_bar.setValue(0)
         self.progress_label.setText("处理失败")
         self.stats_label.setText("识别失败，请检查 Key、网络或服务权限")
