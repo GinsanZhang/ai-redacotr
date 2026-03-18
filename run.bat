@@ -10,7 +10,7 @@ echo ==========================================
 echo.
 
 set PYTHONUTF8=1
-"D:\ProgramData\anaconda3\python.exe" -u "D:\ai\aishortcut\redactor.py"
+"D:\ProgramData\anaconda3\python.exe" -u -m src.redactor
 
 echo.
 pause
