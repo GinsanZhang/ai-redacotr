@@ -1,22 +1,21 @@
-import sys
 import time
 import cv2
-import numpy as np
-import ctypes
-from PIL import Image, ImageGrab
-from PyQt5.QtWidgets import (
+from PIL import ImageGrab
+from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QPushButton,
     QVBoxLayout, QHBoxLayout, QScrollArea, QFileDialog,
     QStatusBar, QFrame, QSizePolicy, QCheckBox, QComboBox,
-    QSlider, QMessageBox, QShortcut, QProgressBar
+    QSlider, QMessageBox, QProgressBar
 )
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
-from PyQt5.QtGui import QPixmap, QImage, QKeySequence
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QImage, QKeySequence, QShortcut
 
 from .config import CONFIG, STYLESHEET
-from .utils import dev_log
 from .ui import AnnotationCanvas, ScreenshotSelector, pil_to_cv
-from .core import apply_mosaic
+
+ALIGN_CENTER = Qt.AlignmentFlag.AlignCenter
+ORIENTATION_HORIZONTAL = Qt.Orientation.Horizontal
+IMAGE_FORMAT_RGB888 = QImage.Format.Format_RGB888
 
 class MainWindow(QMainWindow):
     _screenshot_signal = pyqtSignal()
@@ -49,7 +48,7 @@ class MainWindow(QMainWindow):
         
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
-        self.scroll.setAlignment(Qt.AlignCenter)
+        self.scroll.setAlignment(ALIGN_CENTER)
         self.scroll.setStyleSheet("QScrollArea { border: none; background: #0d0d12; }")
         self.scroll.setWidget(self.canvas)
         body.addWidget(self.scroll, 1)
@@ -142,7 +141,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.style_combo)
         
         layout.addWidget(QLabel("模糊强度", objectName="smallLabel"))
-        self.strength_slider = QSlider(Qt.Horizontal)
+        self.strength_slider = QSlider(ORIENTATION_HORIZONTAL)
         self.strength_slider.setRange(5, 50)
         self.strength_slider.setValue(CONFIG["mosaic_strength"])
         self.strength_slider.valueChanged.connect(self._on_strength_changed)
@@ -263,7 +262,7 @@ class MainWindow(QMainWindow):
         if res is not None:
             rgb = cv2.cvtColor(res, cv2.COLOR_BGR2RGB)
             h, w, ch = rgb.shape
-            QApplication.clipboard().setImage(QImage(rgb.data, w, h, ch * w, QImage.Format_RGB888))
+            QApplication.clipboard().setImage(QImage(rgb.data, w, h, ch * w, IMAGE_FORMAT_RGB888))
             self.status.showMessage("已复制到剪贴板")
 
     def _set_mode(self, mode):
