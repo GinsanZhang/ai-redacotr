@@ -119,4 +119,110 @@ class Worker(QThread):
 
 ## python path
 
-"D:\ProgramData\anaconda3\python.exe" 
+"D:\ProgramData\anaconda3\python.exe"
+
+---
+
+## Development Workflow (研发流程)
+
+### Workflow Overview
+
+This project follows a structured R&D workflow with 5 checkpoints. As an AI assistant, I must follow this workflow when handling requirements.
+
+```
+需求提出 → 需求确认[CP1] → 需求分析 → 设计阶段[CP2] → 开发阶段[CP3] → 测试阶段[CP4] → 验收通过[CP5] → 已关闭
+```
+
+### My Responsibilities as AI Assistant
+
+1. **Record Requirements**: When user proposes a requirement/defect, record it in docs/requirements-pool.md
+2. **Manage Status**: Track requirement status (proposed/analyzing/designing/developing/testing/accepted/closed)
+3. **Checkpoint Confirmation**: Always get user confirmation at each checkpoint before proceeding
+4. **Documentation**: Create all design documents (PRD, UI, Architecture, Detail) before development
+5. **Testing**: Perform self-testing and prepare test reports
+6. **Version Control**: All feature documents go under docs/features/FEATURE-XXX/
+
+### Checkpoints (检查点)
+
+| Checkpoint | Stage | My Action | User Action | Output |
+|------------|-------|-----------|-------------|--------|
+| **CP1** | 需求确认 | Clarify requirements, confirm understanding | Confirm or correct | 需求澄清记录 |
+| **CP2** | 设计完成 | Create PRD, UI, Architecture, Detail docs | Review and approve | 设计文档集 |
+| **CP3** | 开发完成 | Implement code, self-test | Verify demo | 代码+自测报告 |
+| **CP4** | 测试完成 | Create test cases and report | Review test report | 测试报告 |
+| **CP5** | 验收通过 | Prepare acceptance report | Sign off | 验收报告 |
+
+### Requirement Grading (需求分级)
+
+- **P0**: Core features - Must implement (e.g., screenshot, OCR)
+- **P1**: Important features - Should implement (e.g., AI recognition)
+- **P2**: Nice to have - Implement if time permits (e.g., animations)
+
+### Directory Structure for Features
+
+```
+docs/features/FEATURE-XXX-功能名/
+├── 01-需求文档.md    # Requirement analysis
+├── 02-设计文档.md    # Design docs (UI/Architecture/Detail)
+├── 03-测试报告.md    # Test report
+└── 04-验收报告.md    # Acceptance report
+```
+
+### Communication Protocol
+
+**Requesting Checkpoint Confirmation**:
+```
+【检查点X申请】
+需求: FEATURE-XXX-功能名
+阶段: [当前阶段]
+交付物: [文件路径]
+
+请评审，确认通过请回复"CPX通过"，有问题请指出。
+```
+
+**Checkpoint Passed**: User replies "CPX通过"
+
+**Checkpoint Failed**: User replies with modifications needed
+
+### Key Rules
+
+1. **No development before design docs are approved** (CP2)
+2. **No testing before code self-test passes** (CP3)
+3. **No acceptance before test report is reviewed** (CP4)
+4. **All documents must be version controlled** under docs/
+5. **Update real-time architecture doc** after feature completion
+6. **Use Chinese for all documentation** (as per project convention)
+
+### Document Templates
+
+**01-需求文档.md**:
+- 原始需求描述
+- 需求分析（可行性、技术方案）
+- 功能范围（包含/不包含）
+- 验收标准
+- 优先级（P0/P1/P2）
+
+**02-设计文档.md**:
+- UI设计（界面、交互）
+- 架构设计（模块、接口）
+- 详细设计（数据结构、算法）
+
+**03-测试报告.md**:
+- 测试用例
+- 测试结果
+- Bug修复记录
+
+**04-验收报告.md**:
+- 功能演示说明
+- 验收测试项
+- 签字确认
+
+---
+
+## Reference Documents
+
+- **Workflow Spec**: docs/研发流程规范.md
+- **Requirements Pool**: docs/requirements-pool.md
+- **Active Iteration**: docs/requirements-active.md
+- **Architecture**: docs/系统架构文档（实时保鲜）.md
+- **Baseline**: docs/v2026.3.18.1/
