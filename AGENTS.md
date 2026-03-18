@@ -11,14 +11,14 @@
 ## 构建与运行命令
 
 ```bash
-# 安装依赖
-pip install PyQt6 pillow opencv-python requests keyboard pyperclip
+# 安装依赖（推荐）
+pip install -r requirements.txt
 
-# 运行应用程序
+# 或手动安装核心依赖
+pip install PyQt6 pillow opencv-python numpy requests keyboard pyperclip psutil
+
+# 运行应用程序（从项目根目录）
 python -m src.redactor
-
-# 或使用入口脚本
-python src/redactor/__main__.py
 
 # Windows 高 DPI 支持（已内置在代码中，无需手动添加）
 ```
@@ -121,9 +121,11 @@ class Worker(QThread):
 - **PyQt6**: GUI 框架
 - **pillow/PIL**: 图像处理
 - **opencv-python (cv2)**: 图像处理
+- **numpy**: 数值计算
 - **requests**: AI API 的 HTTP 请求
 - **keyboard**: 全局快捷键
 - **pyperclip**: 剪贴板操作
+- **psutil**: 系统工具
 
 ---
 
