@@ -227,7 +227,7 @@ class MainWindow(QMainWindow):
         self.worker.signals.progress.connect(self.progress_label.setText)
         self.worker.signals.progress_value.connect(self.progress_bar.setValue)
         self.worker.signals.finished.connect(self._on_process_finished)
-        self.worker.signals.error.connect(lambda m: self.status.showMessage(f"错误: {m}"))
+        self.worker.signals.error.connect(self._on_process_error)
         self.worker.start()
 
     def _on_process_finished(self, ocr, hits, timings):
@@ -235,9 +235,19 @@ class MainWindow(QMainWindow):
         self.btn_save.setEnabled(True)
         self.btn_copy.setEnabled(True)
         self.progress_bar.setValue(100)
+        self.progress_label.setText("处理完成")
         self.stats_label.setText(f"文字块: {len(ocr)}\n命中: {len(hits)}\n合计打码: {len(hits)}")
         self.timing_label.setText(f"耗时: {timings.get('总耗时', 0):.2f}s")
         self.status.showMessage("处理完成")
+
+    def _on_process_error(self, msg):
+        self.btn_save.setEnabled(False)
+        self.btn_copy.setEnabled(False)
+        self.progress_bar.setValue(0)
+        self.progress_label.setText("处理失败")
+        self.stats_label.setText("识别失败，请检查 Key、网络或服务权限")
+        self.timing_label.setText("阶段耗时：-")
+        self.status.showMessage(f"错误: {msg}")
 
     def _on_regions_changed(self):
         self.status.showMessage(f"当前打码区域：{len(self.canvas.regions)} 处")

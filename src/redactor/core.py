@@ -98,7 +98,8 @@ def detect_by_ai(ocr_blocks: list, progress_cb=None) -> list:
     return []
 
 def detect_by_cloud_vision(image: np.ndarray, progress_cb=None) -> list:
-    if not CONFIG["cloud_vision_api_key"]: return []
+    if not CONFIG["cloud_vision_api_key"]:
+        raise RuntimeError("未配置云端视觉 API Key，请设置 LLM_API_KEY 或 CLOUD_VISION_API_KEY")
     h, w = image.shape[:2]
     scale = min(1.0, 1800.0 / max(h, w))
     resized = cv2.resize(image, (int(w * scale), int(h * scale))) if scale < 1.0 else image
@@ -118,27 +119,31 @@ def detect_by_cloud_vision(image: np.ndarray, progress_cb=None) -> list:
         CONFIG["cloud_vision_api_url"], CONFIG["cloud_vision_api_key"],
         body, CONFIG["cloud_vision_timeout"], "云端视觉", progress_cb
     )
+    if status_code != 200:
+        if status_code == 401:
+            raise RuntimeError("云端视觉鉴权失败(401)，请检查 API Key 是否正确或权限是否开通")
+        if status_code == 403:
+            raise RuntimeError("云端视觉无权限访问(403)，请检查账号权限或模型权限")
+        raise RuntimeError(f"云端视觉请求失败，HTTP {status_code}")
+
+    s, e = content.find('{'), content.rfind('}') + 1
+    if s == -1:
+        raise RuntimeError("云端视觉返回内容缺少 JSON 数据")
+    try:
+        data = json.loads(content[s:e])
+    except Exception:
+        raise RuntimeError("云端视觉返回格式无法解析，请稍后重试")
     
-    if status_code == 200:
-        s, e = content.find('{'), content.rfind('}') + 1
-        if s != -1:
-            try:
-                data = json.loads(content[s:e])
-            except:
-                # 备用正则解析略，为了简洁直接返回空或尝试基础解析
-                return []
-            
-            blocks, out = data.get("blocks", []), []
-            for b in blocks:
-                text_raw, bbox = str(b.get("text", "")), b.get("bbox", [])
-                if not text_raw or len(bbox) != 4: continue
-                text = bytes(text_raw, "utf-8").decode("unicode_escape").strip() if "\\u" in text_raw else text_raw.strip()
-                nx1, ny1, nx2, ny2 = [float(v) for v in bbox]
-                x1, y1 = int(nx1 * w / 1000.0), int(ny1 * h / 1000.0)
-                x2, y2 = int(nx2 * w / 1000.0), int(ny2 * h / 1000.0)
-                out.append({"text": text, "bbox": [max(0, x1), max(0, y1), min(w, x2), min(h, y2)], "conf": float(b.get("conf", 1.0))})
-            return out
-    return []
+    blocks, out = data.get("blocks", []), []
+    for b in blocks:
+        text_raw, bbox = str(b.get("text", "")), b.get("bbox", [])
+        if not text_raw or len(bbox) != 4: continue
+        text = bytes(text_raw, "utf-8").decode("unicode_escape").strip() if "\\u" in text_raw else text_raw.strip()
+        nx1, ny1, nx2, ny2 = [float(v) for v in bbox]
+        x1, y1 = int(nx1 * w / 1000.0), int(ny1 * h / 1000.0)
+        x2, y2 = int(nx2 * w / 1000.0), int(ny2 * h / 1000.0)
+        out.append({"text": text, "bbox": [max(0, x1), max(0, y1), min(w, x2), min(h, y2)], "conf": float(b.get("conf", 1.0))})
+    return out
 
 def apply_mosaic(image: np.ndarray, bbox: list, style: str = "blur", strength: int = 20) -> np.ndarray:
     x1, y1, x2, y2 = bbox
