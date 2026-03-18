@@ -9,6 +9,7 @@ env/
 venv/
 ENV/
 .env
+local_run.bat
 
 # 忽略日志和缓存
 *.log
