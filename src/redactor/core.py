@@ -5,8 +5,82 @@ import time
 import cv2
 import numpy as np
 import requests
-from .config import CONFIG, PATTERNS
+from .config import CONFIG, PATTERNS, VALID_LABELS, LABEL_DELIMITERS
 from .utils import dev_log, mask_secret, summarize_payload_for_log
+
+
+def split_label_value(text: str) -> tuple:
+    """Split text into label and value parts based on valid labels and delimiters.
+    
+    Returns:
+        tuple: (label_part, value_part, has_label) where has_label is bool indicating
+               if a valid label was found at the start of text.
+    """
+    for label in VALID_LABELS:
+        for delimiter in LABEL_DELIMITERS:
+            pattern = re.escape(label) + re.escape(delimiter)
+            match = re.match(pattern, text, re.IGNORECASE)
+            if match:
+                value_start = match.end()
+                value = text[value_start:].strip()
+                return label, value, True
+    return "", text, False
+
+
+def calculate_sensitive_bbox(full_bbox: list, full_text: str, sensitive_text: str) -> list:
+    """Calculate the precise bounding box for sensitive text within a larger text block.
+    
+    Uses character-level positioning to determine the sub-region containing only
+    the sensitive text portion.
+    
+    Args:
+        full_bbox: [x1, y1, x2, y2] of the entire text block
+        full_text: Complete text content of the block
+        sensitive_text: The sensitive portion that needs mosaic
+        
+    Returns:
+        list: [x1, y1, x2, y2] bounding box for sensitive text only
+    """
+    x1, y1, x2, y2 = full_bbox
+    
+    # If sensitive text equals full text, return full bbox
+    if sensitive_text == full_text:
+        return [x1, y1, x2, y2]
+    
+    # Handle edge cases
+    if not sensitive_text or not full_text:
+        return [x1, y1, x2, y2]
+    
+    # Find position of sensitive text in full text
+    try:
+        sensitive_start = full_text.index(sensitive_text)
+        sensitive_end = sensitive_start + len(sensitive_text)
+    except ValueError:
+        # Sensitive text not found in full text, use full bbox as fallback
+        return [x1, y1, x2, y2]
+    
+    total_chars = len(full_text)
+    if total_chars == 0:
+        return [x1, y1, x2, y2]
+    
+    # Calculate proportional position (left-to-right reading assumption)
+    # This assumes characters are roughly equally spaced
+    char_width = (x2 - x1) / total_chars
+    
+    # Calculate new bbox
+    new_x1 = x1 + int(sensitive_start * char_width)
+    new_x2 = x1 + int(sensitive_end * char_width)
+    
+    # Add small padding for better visual coverage
+    padding = max(2, int(char_width * 0.5))
+    new_x1 = max(x1, new_x1 - padding)
+    new_x2 = min(x2, new_x2 + padding)
+    
+    # Ensure minimum width
+    if new_x2 - new_x1 < 5:
+        new_x2 = new_x1 + 5
+    
+    return [new_x1, y1, new_x2, y2]
 
 def request_chat_stream_content(api_url: str, api_key: str, payload: dict, timeout: int, stage: str, progress_cb=None):
     body = dict(payload)
@@ -61,10 +135,48 @@ def detect_by_rules(ocr_blocks: list) -> list:
     hits = []
     for block in ocr_blocks:
         text = block["text"]
-        for label, pattern in PATTERNS.items():
-            if re.search(pattern, text):
-                hits.append({"bbox": block["bbox"], "label": label, "text": text, "source": "rule"})
-                break
+        full_bbox = block["bbox"]
+        
+        # Check for label:value format and calculate precise sensitive bbox
+        label_part, value_part, has_label = split_label_value(text)
+        
+        # First check patterns in the value part if label exists
+        if has_label and value_part:
+            for label, pattern in PATTERNS.items():
+                match = re.search(pattern, value_part)
+                if match:
+                    # Calculate bbox for just the sensitive value
+                    sensitive_bbox = calculate_sensitive_bbox(full_bbox, text, value_part)
+                    hits.append({
+                        "bbox": full_bbox,
+                        "sensitive_bbox": sensitive_bbox,
+                        "label": label,
+                        "text": text,
+                        "source": "rule"
+                    })
+                    break
+            else:
+                # No pattern matched in value, but has label - mosaic the value part only
+                sensitive_bbox = calculate_sensitive_bbox(full_bbox, text, value_part)
+                hits.append({
+                    "bbox": full_bbox,
+                    "sensitive_bbox": sensitive_bbox,
+                    "label": label_part,
+                    "text": text,
+                    "source": "rule"
+                })
+        else:
+            # No label:value format, check full text with patterns
+            for label, pattern in PATTERNS.items():
+                if re.search(pattern, text):
+                    hits.append({
+                        "bbox": full_bbox,
+                        "sensitive_bbox": full_bbox,
+                        "label": label,
+                        "text": text,
+                        "source": "rule"
+                    })
+                    break
     return hits
 
 def detect_by_ai(ocr_blocks: list, progress_cb=None) -> list:
@@ -233,8 +345,13 @@ def detect_by_cloud_vision(image: np.ndarray, progress_cb=None, include_sensitiv
             })
         return out
 
-def apply_mosaic(image: np.ndarray, bbox: list, style: str = "blur", strength: int = 20) -> np.ndarray:
-    x1, y1, x2, y2 = bbox
+def apply_mosaic(image: np.ndarray, bbox: list, style: str = "blur", strength: int = 20, sensitive_bbox: list = None) -> np.ndarray:
+    # Use sensitive_bbox if provided (for precise mosaic), otherwise use full bbox
+    if sensitive_bbox is not None:
+        x1, y1, x2, y2 = sensitive_bbox
+    else:
+        x1, y1, x2, y2 = bbox
+    
     p = 4
     x1, y1 = max(0, x1 - p), max(0, y1 - p)
     x2, y2 = min(image.shape[1], x2 + p), min(image.shape[0], y2 + p)

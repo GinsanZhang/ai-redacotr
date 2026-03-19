@@ -86,7 +86,12 @@ class AnnotationCanvas(QLabel):
 
     def load_image(self, image_cv: np.ndarray, hits: list):
         self.original_cv = image_cv.copy()
-        self.regions = [{"bbox": h["bbox"], "label": h["label"], "source": h.get("source","rule")} for h in hits]
+        self.regions = [{
+            "bbox": h["bbox"],
+            "sensitive_bbox": h.get("sensitive_bbox", h["bbox"]),
+            "label": h["label"],
+            "source": h.get("source","rule")
+        } for h in hits]
         self._fit_and_render()
 
     def _fit_and_render(self):
@@ -99,7 +104,9 @@ class AnnotationCanvas(QLabel):
         if self.original_cv is None: return
         img = self.original_cv.copy()
         for r in self.regions:
-            img = apply_mosaic(img, r["bbox"], CONFIG["mosaic_style"], CONFIG["mosaic_strength"])
+            # Use sensitive_bbox for precise mosaic if available
+            sensitive_bbox = r.get("sensitive_bbox", r["bbox"])
+            img = apply_mosaic(img, r["bbox"], CONFIG["mosaic_style"], CONFIG["mosaic_strength"], sensitive_bbox)
         h, w = img.shape[:2]
         nw, nh = int(w * self.display_scale), int(h * self.display_scale)
         disp = cv2.resize(img, (nw, nh))
@@ -187,7 +194,10 @@ class AnnotationCanvas(QLabel):
     def get_result_image(self):
         if self.original_cv is None: return None
         img = self.original_cv.copy()
-        for r in self.regions: img = apply_mosaic(img, r["bbox"], CONFIG["mosaic_style"], CONFIG["mosaic_strength"])
+        for r in self.regions:
+            # Use sensitive_bbox for precise mosaic if available
+            sensitive_bbox = r.get("sensitive_bbox", r["bbox"])
+            img = apply_mosaic(img, r["bbox"], CONFIG["mosaic_style"], CONFIG["mosaic_strength"], sensitive_bbox)
         return img
 
 class ScreenshotSelector(QWidget):
