@@ -35,7 +35,6 @@ IMAGE_FORMAT_RGB888 = QImage.Format.Format_RGB888
 PAINTER_ANTIALIAS = QPainter.RenderHint.Antialiasing
 PAINTER_CLEAR = QPainter.CompositionMode.CompositionMode_Clear
 PAINTER_SOURCE_OVER = QPainter.CompositionMode.CompositionMode_SourceOver
-SIZE_POLICY_EXPANDING = QSizePolicy.Policy.Expanding
 
 def pil_to_cv(img: Image.Image) -> np.ndarray:
     return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
@@ -47,79 +46,32 @@ class ProcessWorker(QThread):
     def __init__(self, image_cv: np.ndarray):
         super().__init__()
         self.image_cv, self.signals = image_cv, ProcessSignals()
-
     def run(self):
         try:
-            if CONFIG.get("deep_ai_enabled", False):
-                self._run_deep_mode()
-            else:
-                self._run_fast_mode()
+            timings, total_start = {}, time.time()
+            self.signals.progress_value.emit(5)
+            self.signals.progress.emit("云端视觉识别中...")
+            s1 = time.time()
+            ocr = detect_by_cloud_vision(self.image_cv, self.signals.progress.emit)
+            timings["云端视觉"] = time.time() - s1
+            self.signals.progress_value.emit(55)
+            self.signals.progress.emit("规则匹配中...")
+            s2 = time.time()
+            rules = detect_by_rules(ocr)
+            timings["规则匹配"] = time.time() - s2
+            self.signals.progress_value.emit(75)
+            self.signals.progress.emit("AI分析中...")
+            s3 = time.time()
+            rule_texts = {h["text"] for h in rules}
+            rem = [b for b in ocr if b["text"] not in rule_texts]
+            ai = detect_by_ai(rem, self.signals.progress.emit)
+            timings["AI分析"] = time.time() - s3
+            timings["总耗时"] = time.time() - total_start
+            self.signals.progress_value.emit(100)
+            self.signals.progress.emit("处理完成")
+            self.signals.finished.emit(ocr, rules + ai, timings)
         except Exception as e:
             self.signals.error.emit(str(e))
-
-    def _run_fast_mode(self):
-        """快速模式：云端视觉同时识别文字和敏感信息 + 规则补充"""
-        timings, total_start = {}, time.time()
-        
-        self.signals.progress_value.emit(5)
-        self.signals.progress.emit("云端视觉识别中...")
-        s1 = time.time()
-        result = detect_by_cloud_vision(self.image_cv, self.signals.progress.emit, include_sensitive=True)
-        timings["云端视觉"] = time.time() - s1
-        
-        ocr_blocks = result["ocr_blocks"]
-        sensitive_hits = result["sensitive_hits"]
-        
-        self.signals.progress_value.emit(80)
-        self.signals.progress.emit("规则补充匹配中...")
-        s2 = time.time()
-        
-        # 规则作为补充：检测云端视觉可能遗漏的敏感信息
-        rule_hits = detect_by_rules(ocr_blocks)
-        
-        # 合并结果，去重（根据bbox判断是否为同一区域）
-        existing_bboxes = {tuple(h["bbox"]) for h in sensitive_hits}
-        for hit in rule_hits:
-            bbox_tuple = tuple(hit["bbox"])
-            if bbox_tuple not in existing_bboxes:
-                sensitive_hits.append(hit)
-                existing_bboxes.add(bbox_tuple)
-        
-        timings["规则匹配"] = time.time() - s2
-        timings["总耗时"] = time.time() - total_start
-        
-        self.signals.progress_value.emit(100)
-        self.signals.progress.emit("处理完成")
-        self.signals.finished.emit(ocr_blocks, sensitive_hits, timings)
-
-    def _run_deep_mode(self):
-        """深度模式：OCR → 规则 → AI语义分析（原始流程）"""
-        timings, total_start = {}, time.time()
-        
-        self.signals.progress_value.emit(5)
-        self.signals.progress.emit("云端视觉识别中...")
-        s1 = time.time()
-        ocr = detect_by_cloud_vision(self.image_cv, self.signals.progress.emit)
-        timings["云端视觉"] = time.time() - s1
-        
-        self.signals.progress_value.emit(40)
-        self.signals.progress.emit("规则匹配中...")
-        s2 = time.time()
-        rules = detect_by_rules(ocr)
-        timings["规则匹配"] = time.time() - s2
-        
-        self.signals.progress_value.emit(50)
-        self.signals.progress.emit("AI深度分析中...")
-        s3 = time.time()
-        rule_texts = {h["text"] for h in rules}
-        rem = [b for b in ocr if b["text"] not in rule_texts]
-        ai = detect_by_ai(rem, self.signals.progress.emit)
-        timings["AI分析"] = time.time() - s3
-        
-        timings["总耗时"] = time.time() - total_start
-        self.signals.progress_value.emit(100)
-        self.signals.progress.emit("处理完成")
-        self.signals.finished.emit(ocr, rules + ai, timings)
 
 class AnnotationCanvas(QLabel):
     regions_changed = pyqtSignal()
@@ -127,11 +79,10 @@ class AnnotationCanvas(QLabel):
         super().__init__()
         self.original_cv, self.display_scale, self.regions = None, 1.0, []
         self.drag_start, self.drag_current, self.hover_region, self.mode = None, None, None, "add"
-        self.image_offset = (0, 0)  # 图片在 QLabel 中的偏移量 (x, y)
         self.setMouseTracking(True)
         self.setCursor(QCursor(CURSOR_CROSS))
         self.setMinimumSize(400, 300)
-        self.setSizePolicy(SIZE_POLICY_EXPANDING, SIZE_POLICY_EXPANDING)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
     def load_image(self, image_cv: np.ndarray, hits: list):
         self.original_cv = image_cv.copy()
@@ -151,29 +102,13 @@ class AnnotationCanvas(QLabel):
             img = apply_mosaic(img, r["bbox"], CONFIG["mosaic_style"], CONFIG["mosaic_strength"])
         h, w = img.shape[:2]
         nw, nh = int(w * self.display_scale), int(h * self.display_scale)
-        
-        # 计算图片在 QLabel 中的偏移量（居中显示时的偏移）
-        offset_x = max(0, (self.width() - nw) // 2)
-        offset_y = max(0, (self.height() - nh) // 2)
-        self.image_offset = (offset_x, offset_y)
-        
-        # 创建与 QLabel 大小相同的 pixmap，填充背景色
-        pix = QPixmap(self.width(), self.height())
-        pix.fill(GLOBAL_TRANSPARENT)
-        
-        ptr = QPainter(pix)
-        ptr.setRenderHint(PAINTER_ANTIALIAS)
-        
-        # 绘制缩放后的图片
         disp = cv2.resize(img, (nw, nh))
         rgb = cv2.cvtColor(disp, cv2.COLOR_BGR2RGB)
-        img_pix = QPixmap.fromImage(QImage(rgb.data, nw, nh, 3 * nw, IMAGE_FORMAT_RGB888))
-        ptr.drawPixmap(offset_x, offset_y, img_pix)
-        
-        # 绘制区域框（相对于偏移后的位置）
+        pix = QPixmap.fromImage(QImage(rgb.data, nw, nh, 3 * nw, IMAGE_FORMAT_RGB888))
+        ptr = QPainter(pix)
+        ptr.setRenderHint(PAINTER_ANTIALIAS)
         for i, r in enumerate(self.regions):
-            x1, y1, x2, y2 = [int(c * self.display_scale) + offset_x if j % 2 == 0 else int(c * self.display_scale) + offset_y 
-                              for j, c in enumerate(r["bbox"])]
+            x1, y1, x2, y2 = [int(c * self.display_scale) for c in r["bbox"]]
             col = QColor(255, 80, 80, 180) if r.get("source") != "ai" else QColor(255, 160, 0, 180)
             if i == self.hover_region: col = QColor(255, 50, 50, 220)
             ptr.setPen(QPen(col, 2))
@@ -185,17 +120,14 @@ class AnnotationCanvas(QLabel):
                 ptr.setBrush(QBrush(col))
                 fm = ptr.fontMetrics()
                 tw, th = fm.horizontalAdvance(lbl) + 8, fm.height() + 4
-                ptr.drawRect(x1, max(offset_y, y1 - th), tw, th)
-                ptr.drawText(x1 + 4, max(th + offset_y, y1) - 3, lbl)
-        
-        # 绘制拖拽框
+                ptr.drawRect(x1, max(0, y1 - th), tw, th)
+                ptr.drawText(x1 + 4, max(th, y1) - 3, lbl)
         if self.drag_start and self.drag_current:
             x1, y1 = min(self.drag_start.x(), self.drag_current.x()), min(self.drag_start.y(), self.drag_current.y())
             x2, y2 = max(self.drag_start.x(), self.drag_current.x()), max(self.drag_start.y(), self.drag_current.y())
             ptr.setPen(QPen(QColor(100, 200, 255), 2, PEN_DASH_LINE))
             ptr.setBrush(QBrush(QColor(100, 200, 255, 40)))
             ptr.drawRect(x1, y1, x2 - x1, y2 - y1)
-        
         ptr.end()
         self.setPixmap(pix)
 
@@ -231,28 +163,14 @@ class AnnotationCanvas(QLabel):
             x2, y2 = max(self.drag_start.x(), end.x()), max(self.drag_start.y(), end.y())
             if (x2 - x1) > 5 and (y2 - y1) > 5:
                 s = self.display_scale
-                offset_x, offset_y = self.image_offset
-                # 减去偏移量，转换为相对于图片的坐标，再除以缩放比例得到原图坐标
-                self.regions.append({
-                    "bbox": [
-                        int((x1 - offset_x) / s), 
-                        int((y1 - offset_y) / s), 
-                        int((x2 - offset_x) / s), 
-                        int((y2 - offset_y) / s)
-                    ], 
-                    "label": "手动", 
-                    "source": "manual"
-                })
+                self.regions.append({"bbox": [int(x1/s), int(y1/s), int(x2/s), int(y2/s)], "label": "手动", "source": "manual"})
                 self.regions_changed.emit()
         self.drag_start = self.drag_current = None
         self._render()
 
     def _find_region_at(self, pt):
         s = self.display_scale
-        offset_x, offset_y = self.image_offset
-        # 减去偏移量，再除以缩放比例得到原图坐标
-        ox = (pt.x() - offset_x) / s
-        oy = (pt.y() - offset_y) / s
+        ox, oy = pt.x() / s, pt.y() / s
         for i, r in enumerate(self.regions):
             x1, y1, x2, y2 = r["bbox"]
             if x1 <= ox <= x2 and y1 <= oy <= y2: return i

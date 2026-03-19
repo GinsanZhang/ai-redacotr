@@ -153,19 +153,25 @@ class Worker(QThread):
 - **研发Agent**: Joker (我)
 
 ### 提交规范
-每次Git提交都需要在commit message中备注提交人：
+每次Git提交都需要在commit message中备注需求编号和提交人：
 ```
-[提交类型]: [描述]
+[需求编号]: [提交类型] [描述]
 
 Author: [Ginsan|Joker]
 ```
 
 示例：
 ```
-Feat: Add manual recognition button
+FEATURE-003: Feat: Add smart mosaic range optimization
 
 Author: Joker
 ```
+
+**规则说明**:
+- 需求编号: FEATURE-XXX 或 BUG-XXX，放在最前面
+- 提交类型: Feat|Fix|Refactor|Docs|Test|Style
+- 描述: 简洁明了，说明做了什么
+- 提交人: Ginsan 或 Joker
 
 ---
 
