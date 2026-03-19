@@ -40,36 +40,48 @@ def pil_to_cv(img: Image.Image) -> np.ndarray:
     return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
 
 class ProcessSignals(QObject):
-    progress, progress_value, finished, error = pyqtSignal(str), pyqtSignal(int), pyqtSignal(list, list, dict), pyqtSignal(str)
+    progress, progress_value, finished, error, elapsed_time = pyqtSignal(str), pyqtSignal(int), pyqtSignal(list, list, dict), pyqtSignal(str), pyqtSignal(float)
 
 class ProcessWorker(QThread):
     def __init__(self, image_cv: np.ndarray):
         super().__init__()
         self.image_cv, self.signals = image_cv, ProcessSignals()
+        self.total_start = None
     def run(self):
         try:
-            timings, total_start = {}, time.time()
+            timings, self.total_start = {}, time.time()
             self.signals.progress_value.emit(5)
-            self.signals.progress.emit("云端视觉识别中...")
+            self.signals.progress.emit("多模态识别中...")
             s1 = time.time()
-            ocr = detect_by_cloud_vision(self.image_cv, self.signals.progress.emit)
-            timings["云端视觉"] = time.time() - s1
+            result = detect_by_cloud_vision(self.image_cv, self.signals.progress.emit, include_sensitive=True)
+            ocr = result.get("ocr_blocks", [])
+            cloud_hits = result.get("sensitive_hits", [])
+            timings["多模态识别"] = time.time() - s1
             self.signals.progress_value.emit(55)
             self.signals.progress.emit("规则匹配中...")
             s2 = time.time()
-            rules = detect_by_rules(ocr)
+            # 只对未被云视觉识别为敏感的文本块进行规则匹配
+            cloud_texts = {h["text"] for h in cloud_hits}
+            remaining_ocr = [b for b in ocr if b["text"] not in cloud_texts]
+            rules = detect_by_rules(remaining_ocr)
             timings["规则匹配"] = time.time() - s2
             self.signals.progress_value.emit(75)
-            self.signals.progress.emit("AI分析中...")
-            s3 = time.time()
-            rule_texts = {h["text"] for h in rules}
-            rem = [b for b in ocr if b["text"] not in rule_texts]
-            ai = detect_by_ai(rem, self.signals.progress.emit)
-            timings["AI分析"] = time.time() - s3
-            timings["总耗时"] = time.time() - total_start
+            if CONFIG["ai_enabled"]:
+                self.signals.progress.emit("AI分析中...")
+                s3 = time.time()
+                # AI分析也只在剩余文本上进行
+                rule_texts = {h["text"] for h in rules}
+                rem = [b for b in remaining_ocr if b["text"] not in rule_texts]
+                ai = detect_by_ai(rem, self.signals.progress.emit)
+                timings["AI分析"] = time.time() - s3
+            else:
+                ai = []
+            timings["总耗时"] = time.time() - self.total_start
             self.signals.progress_value.emit(100)
             self.signals.progress.emit("处理完成")
-            self.signals.finished.emit(ocr, rules + ai, timings)
+            # 合并云视觉、规则和AI识别的结果
+            all_hits = cloud_hits + rules + ai
+            self.signals.finished.emit(ocr, all_hits, timings)
         except Exception as e:
             self.signals.error.emit(str(e))
 
@@ -82,7 +94,7 @@ class AnnotationCanvas(QLabel):
         self.setMouseTracking(True)
         self.setCursor(QCursor(CURSOR_CROSS))
         self.setMinimumSize(400, 300)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
     def load_image(self, image_cv: np.ndarray, hits: list):
         self.original_cv = image_cv.copy()
@@ -127,8 +139,11 @@ class AnnotationCanvas(QLabel):
                 ptr.setBrush(QBrush(col))
                 fm = ptr.fontMetrics()
                 tw, th = fm.horizontalAdvance(lbl) + 8, fm.height() + 4
-                ptr.drawRect(x1, max(0, y1 - th), tw, th)
-                ptr.drawText(x1 + 4, max(th, y1) - 3, lbl)
+                # Draw label at the right side outside of the block
+                label_x = x2
+                label_y = max(y2, y1 + th - 4)
+                ptr.drawRect(label_x, label_y - th, tw, th)
+                ptr.drawText(label_x + 4, label_y - 3, lbl)
         if self.drag_start and self.drag_current:
             x1, y1 = min(self.drag_start.x(), self.drag_current.x()), min(self.drag_start.y(), self.drag_current.y())
             x2, y2 = max(self.drag_start.x(), self.drag_current.x()), max(self.drag_start.y(), self.drag_current.y())

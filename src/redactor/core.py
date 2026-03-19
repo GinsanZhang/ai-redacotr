@@ -10,20 +10,37 @@ from .utils import dev_log, mask_secret, summarize_payload_for_log
 
 
 def split_label_value(text: str) -> tuple:
-    """Split text into label and value parts based on valid labels and delimiters.
+    """Intelligently split text into label and value parts.
+    
+    Uses smart delimiter detection: finds known labels followed by any separator
+    (colon, space, dash, etc.) without relying on a fixed delimiter list.
     
     Returns:
         tuple: (label_part, value_part, has_label) where has_label is bool indicating
                if a valid label was found at the start of text.
     """
+    text_stripped = text.strip()
+    
     for label in VALID_LABELS:
-        for delimiter in LABEL_DELIMITERS:
-            pattern = re.escape(label) + re.escape(delimiter)
-            match = re.match(pattern, text, re.IGNORECASE)
-            if match:
-                value_start = match.end()
-                value = text[value_start:].strip()
-                return label, value, True
+        # Check if text starts with this label (case insensitive)
+        if text_stripped.lower().startswith(label.lower()):
+            # Find where the label ends
+            label_end = len(label)
+            
+            # Skip any separator characters (colon, space, dash, etc.)
+            separator_chars = {'：', ':', ' ', '-', '—', '──', '→', '›', '»', '|', '/', '\\', '·', '•'}
+            value_start = label_end
+            
+            # Skip consecutive separator characters
+            while value_start < len(text_stripped) and text_stripped[value_start] in separator_chars:
+                value_start += 1
+            
+            # If we found a separator and there's content after it
+            if value_start > label_end and value_start < len(text_stripped):
+                value = text_stripped[value_start:].strip()
+                if value:  # Ensure there's actual value content
+                    return text_stripped[:label_end], value, True
+    
     return "", text, False
 
 
@@ -181,6 +198,20 @@ def detect_by_rules(ocr_blocks: list) -> list:
 
 def detect_by_ai(ocr_blocks: list, progress_cb=None) -> list:
     if not CONFIG["ai_enabled"] or not ocr_blocks or not CONFIG["llm_api_key"]: return []
+    
+    # 根据深度模式配置参数
+    is_deep_mode = CONFIG.get("deep_ai_enabled", False)
+    if is_deep_mode:
+        # 深度模式：更保守的参数，追求准确性
+        timeout = CONFIG.get("llm_timeout", 180)
+        retries = CONFIG.get("llm_retries", 2)
+        temperature = 0.1
+    else:
+        # 快速模式：更快的响应，可能牺牲一些准确性
+        timeout = 40  # 快速模式40秒超时
+        retries = 1   # 快速模式只重试1次
+        temperature = 0.3  # 稍微高的temperature可能更快响应
+    
     items = [{"id": i, "text": b["text"]} for i, b in enumerate(ocr_blocks)]
     prompt = f"""你是一个隐私保护专家。请从以下 OCR 文字块中识别个人隐私或敏感信息。
 待分析数据：{json.dumps(items, ensure_ascii=False)}
@@ -188,13 +219,12 @@ def detect_by_ai(ocr_blocks: list, progress_cb=None) -> list:
 过滤规则：手机号、身份证等已由规则处理，请忽略。不要标记公共按钮。
 输出要求：返回 JSON: {{"sensitive": [{{"id": 0, "reason": "姓名"}}]}}。"""
 
-    retries = CONFIG.get("llm_retries", 2)
     for attempt in range(retries + 1):
         try:
             content, status_code = request_chat_stream_content(
                 CONFIG["llm_api_url"], CONFIG["llm_api_key"],
-                {"model": CONFIG["llm_model"], "messages": [{"role": "user", "content": prompt}], "temperature": 0.1},
-                CONFIG["llm_timeout"], "AI分析", progress_cb
+                {"model": CONFIG["llm_model"], "messages": [{"role": "user", "content": prompt}], "temperature": temperature},
+                timeout, "AI分析", progress_cb
             )
             if status_code == 200:
                 s, e = content.find('{'), content.rfind('}') + 1
@@ -223,7 +253,7 @@ def detect_by_cloud_vision(image: np.ndarray, progress_cb=None, include_sensitiv
         include_sensitive=True时: dict - {"ocr_blocks": [...], "sensitive_hits": [...]}
     """
     if not CONFIG["cloud_vision_api_key"]:
-        raise RuntimeError("未配置云端视觉 API Key，请设置 LLM_API_KEY 或 CLOUD_VISION_API_KEY")
+        raise RuntimeError("未配置多模态识别 API Key，请设置 LLM_API_KEY 或 CLOUD_VISION_API_KEY")
     h, w = image.shape[:2]
     scale = min(1.0, 1800.0 / max(h, w))
     resized = cv2.resize(image, (int(w * scale), int(h * scale))) if scale < 1.0 else image
@@ -252,6 +282,10 @@ def detect_by_cloud_vision(image: np.ndarray, progress_cb=None, include_sensitiv
 
 重要：bbox 坐标必须是基于图片尺寸归一化到 [0, 1000] 范围内的整数。
 
+对于敏感信息，如果包含标签（如"姓名：张三"），需要返回两个坐标：
+- bbox: 整个文字块的坐标
+- sensitive_bbox: 仅敏感值部分的坐标（如"张三"的位置）
+
 输出格式：
 {
   "blocks": [
@@ -259,7 +293,8 @@ def detect_by_cloud_vision(image: np.ndarray, progress_cb=None, include_sensitiv
       "text": "识别文字",
       "bbox": [xmin, ymin, xmax, ymax],
       "is_sensitive": true/false,
-      "sensitive_type": "姓名/地址/手机号等"
+      "sensitive_type": "姓名/地址/手机号等",
+      "sensitive_bbox": [xmin, ymin, xmax, ymax]  // 仅当is_sensitive为true时，返回敏感值部分的精确坐标
     }
   ]
 }"""
@@ -274,22 +309,22 @@ def detect_by_cloud_vision(image: np.ndarray, progress_cb=None, include_sensitiv
     
     content, status_code = request_chat_stream_content(
         CONFIG["cloud_vision_api_url"], CONFIG["cloud_vision_api_key"],
-        body, CONFIG["cloud_vision_timeout"], "云端视觉", progress_cb
+        body, CONFIG["cloud_vision_timeout"], "多模态识别", progress_cb
     )
     if status_code != 200:
         if status_code == 401:
-            raise RuntimeError("云端视觉鉴权失败(401)，请检查 API Key 是否正确或权限是否开通")
+            raise RuntimeError("多模态识别鉴权失败(401)，请检查 API Key 是否正确或权限是否开通")
         if status_code == 403:
-            raise RuntimeError("云端视觉无权限访问(403)，请检查账号权限或模型权限")
-        raise RuntimeError(f"云端视觉请求失败，HTTP {status_code}")
+            raise RuntimeError("多模态识别无权限访问(403)，请检查账号权限或模型权限")
+        raise RuntimeError(f"多模态识别请求失败，HTTP {status_code}")
 
     s, e = content.find('{'), content.rfind('}') + 1
     if s == -1:
-        raise RuntimeError("云端视觉返回内容缺少 JSON 数据")
+        raise RuntimeError("多模态识别返回内容缺少 JSON 数据")
     try:
         data = json.loads(content[s:e])
     except Exception:
-        raise RuntimeError("云端视觉返回格式无法解析，请稍后重试")
+        raise RuntimeError("多模态识别返回格式无法解析，请稍后重试")
     
     blocks = data.get("blocks", [])
     
@@ -319,8 +354,28 @@ def detect_by_cloud_vision(image: np.ndarray, progress_cb=None, include_sensitiv
             
             # 如果是敏感信息，加入hits
             if b.get("is_sensitive", False):
+                # 优先使用视觉模型返回的敏感值坐标
+                model_sensitive_bbox = b.get("sensitive_bbox")
+                if model_sensitive_bbox and len(model_sensitive_bbox) == 4:
+                    # 转换归一化坐标到像素坐标
+                    sx1, sy1, sx2, sy2 = [float(v) for v in model_sensitive_bbox]
+                    sensitive_bbox = [
+                        max(0, int(sx1 * w / 1000.0)),
+                        max(0, int(sy1 * h / 1000.0)),
+                        min(w, int(sx2 * w / 1000.0)),
+                        min(h, int(sy2 * h / 1000.0))
+                    ]
+                else:
+                    # 回退到智能分隔符估算
+                    label_part, value_part, has_label = split_label_value(text)
+                    if has_label and value_part:
+                        sensitive_bbox = calculate_sensitive_bbox(pixel_bbox, text, value_part)
+                    else:
+                        sensitive_bbox = pixel_bbox
+                
                 sensitive_hits.append({
                     "bbox": pixel_bbox,
+                    "sensitive_bbox": sensitive_bbox,
                     "label": b.get("sensitive_type", "敏感信息"),
                     "text": text,
                     "source": "ai"

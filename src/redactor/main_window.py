@@ -23,6 +23,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.worker, self.current_cv = None, None
+        self.elapsed_timer = None
+        self.recognition_start_time = None
         self._setup_ui()
         self._setup_hotkey()
 
@@ -155,22 +157,41 @@ class MainWindow(QMainWindow):
         self.strength_slider.valueChanged.connect(self._on_strength_changed)
         layout.addWidget(self.strength_slider)
         
-        layout.addWidget(self._section("AI 识别"))
-        self.ai_checkbox = QCheckBox("启用 AI 识别姓名/地址")
-        self.ai_checkbox.setObjectName("checkbox")
-        self.ai_checkbox.setChecked(CONFIG["ai_enabled"])
-        self.ai_checkbox.toggled.connect(lambda v: CONFIG.update({"ai_enabled": v}))
-        layout.addWidget(self.ai_checkbox)
-        
-        self.deep_ai_checkbox = QCheckBox("启用深度AI识别")
-        self.deep_ai_checkbox.setObjectName("checkbox")
-        self.deep_ai_checkbox.setChecked(CONFIG.get("deep_ai_enabled", False))
-        self.deep_ai_checkbox.setToolTip(
-            "快速模式（推荐）：30-40秒\n"
-            "深度模式：60-80秒，识别更准确"
+        layout.addWidget(self._section("AI 识别模式"))
+        self.ai_mode_combo = QComboBox()
+        self.ai_mode_combo.setObjectName("comboBox")
+        self.ai_mode_combo.addItem("🚀 快速模式", "fast")
+        self.ai_mode_combo.addItem("🔍 深度模式", "deep")
+        # 根据配置设置当前选项
+        if CONFIG.get("ai_enabled", False):
+            self.ai_mode_combo.setCurrentIndex(1)  # 深度模式
+        else:
+            self.ai_mode_combo.setCurrentIndex(0)  # 快速模式
+        self.ai_mode_combo.setToolTip(
+            "🚀 快速模式：多模态识别 + 规则匹配\n"
+            "   适合：手机号、身份证等格式清晰的敏感信息\n"
+            "   耗时：10-20秒\n\n"
+            "🔍 深度模式：多模态识别 + 规则 + 大模型语义分析\n"
+            "   适合：姓名、地址等需要语义理解的敏感信息\n" 
+            "   耗时：30-60秒"
         )
-        self.deep_ai_checkbox.toggled.connect(lambda v: CONFIG.update({"deep_ai_enabled": v}))
-        layout.addWidget(self.deep_ai_checkbox)
+        self.ai_mode_combo.currentIndexChanged.connect(self._on_ai_mode_changed)
+        layout.addWidget(self.ai_mode_combo)
+        
+        layout.addWidget(self._section("模型信息"))
+        model_info_text = f"多模态模型: {CONFIG['cloud_vision_model']}\nAI 大模型: {CONFIG['llm_model']}"
+        self.model_info_label = QLabel(model_info_text, objectName="modelInfoLabel", wordWrap=True)
+        self.model_info_label.setStyleSheet("""
+            QLabel#modelInfoLabel {
+                color: #64748b;
+                font-size: 11px;
+                line-height: 1.6;
+                background: #0d0d12;
+                border-radius: 8px;
+                padding: 10px;
+            }
+        """)
+        layout.addWidget(self.model_info_label)
         
         layout.addWidget(self._section("处理进度"))
         self.progress_bar = QProgressBar(objectName="progressBar")
@@ -256,6 +277,12 @@ class MainWindow(QMainWindow):
         self.btn_copy.setEnabled(False)
         self.stats_label.setText("处理中...")
         self.progress_bar.setValue(0)
+        self.timing_label.setText("耗时: 0.0s")
+        # 启动计时器
+        self.recognition_start_time = time.time()
+        self.elapsed_timer = QTimer(self)
+        self.elapsed_timer.timeout.connect(self._update_elapsed_time)
+        self.elapsed_timer.start(100)  # 每100ms更新一次
         self.worker = ProcessWorker(self.current_cv)
         self.worker.signals.progress.connect(self.progress_label.setText)
         self.worker.signals.progress_value.connect(self.progress_bar.setValue)
@@ -263,7 +290,17 @@ class MainWindow(QMainWindow):
         self.worker.signals.error.connect(self._on_process_error)
         self.worker.start()
 
+    def _update_elapsed_time(self):
+        """更新已用时间显示"""
+        if self.recognition_start_time:
+            elapsed = time.time() - self.recognition_start_time
+            self.timing_label.setText(f"耗时: {elapsed:.1f}s")
+
     def _on_process_finished(self, ocr, hits, timings):
+        # 停止计时器
+        if self.elapsed_timer:
+            self.elapsed_timer.stop()
+            self.elapsed_timer = None
         self.canvas.load_image(self.current_cv, hits)
         self.btn_save.setEnabled(True)
         self.btn_copy.setEnabled(True)
@@ -276,6 +313,10 @@ class MainWindow(QMainWindow):
         self.status.showMessage("处理完成")
 
     def _on_process_error(self, msg):
+        # 停止计时器
+        if self.elapsed_timer:
+            self.elapsed_timer.stop()
+            self.elapsed_timer = None
         self.btn_save.setEnabled(False)
         self.btn_copy.setEnabled(False)
         self.btn_recognize.setEnabled(True)
@@ -315,3 +356,11 @@ class MainWindow(QMainWindow):
     def _on_strength_changed(self, v):
         CONFIG["mosaic_strength"] = v
         self.canvas._render()
+
+    def _on_ai_mode_changed(self, idx):
+        """处理AI识别模式切换"""
+        mode = self.ai_mode_combo.currentData()
+        if mode == "deep":
+            CONFIG["ai_enabled"] = True
+        else:
+            CONFIG["ai_enabled"] = False
