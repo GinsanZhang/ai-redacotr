@@ -239,9 +239,9 @@ def detect_by_ai(ocr_blocks: list, progress_cb=None) -> list:
         except Exception as e: dev_log(f"AI分析异常: {e}", "ERROR")
     return []
 
-def detect_by_cloud_vision(image: np.ndarray, progress_cb=None, include_sensitive=False):
+def detect_by_vlm(image: np.ndarray, progress_cb=None, include_sensitive=False):
     """
-    使用云端多模态模型进行OCR识别
+    使用VLM(视觉语言模型)进行OCR识别
     
     参数:
         image: OpenCV图像
@@ -252,8 +252,8 @@ def detect_by_cloud_vision(image: np.ndarray, progress_cb=None, include_sensitiv
         include_sensitive=False时: list - OCR结果列表
         include_sensitive=True时: dict - {"ocr_blocks": [...], "sensitive_hits": [...]}
     """
-    if not CONFIG["cloud_vision_api_key"]:
-        raise RuntimeError("未配置多模态识别 API Key，请设置 LLM_API_KEY 或 CLOUD_VISION_API_KEY")
+    if not CONFIG["vlm_api_key"]:
+        raise RuntimeError("未配置VLM API Key，请设置 LLM_API_KEY 或 VLM_API_KEY")
     h, w = image.shape[:2]
     scale = min(1.0, 1800.0 / max(h, w))
     resized = cv2.resize(image, (int(w * scale), int(h * scale))) if scale < 1.0 else image
@@ -302,29 +302,29 @@ def detect_by_cloud_vision(image: np.ndarray, progress_cb=None, include_sensitiv
         prompt = "你是一个高精度的 OCR 助手。请识别图片中所有的文字块。重要：bbox 坐标必须是基于图片尺寸归一化到 [0, 1000] 范围内的整数。格式：{\"blocks\":[{\"text\":\"...\",\"bbox\":[xmin,ymin,xmax,ymax]}]}"
     
     body = {
-        "model": CONFIG["cloud_vision_model"],
+        "model": CONFIG["vlm_model"],
         "messages": [{"role": "user", "content": [{"type":"text", "text":prompt}, {"type":"image_url", "image_url":{"url":f"data:image/jpeg;base64,{b64}"}}]}],
         "temperature": 0.0
     }
     
     content, status_code = request_chat_stream_content(
-        CONFIG["cloud_vision_api_url"], CONFIG["cloud_vision_api_key"],
-        body, CONFIG["cloud_vision_timeout"], "多模态识别", progress_cb
+        CONFIG["vlm_api_url"], CONFIG["vlm_api_key"],
+        body, CONFIG["vlm_timeout"], "VLM识别", progress_cb
     )
     if status_code != 200:
         if status_code == 401:
-            raise RuntimeError("多模态识别鉴权失败(401)，请检查 API Key 是否正确或权限是否开通")
+            raise RuntimeError("VLM识别鉴权失败(401)，请检查 API Key 是否正确或权限是否开通")
         if status_code == 403:
-            raise RuntimeError("多模态识别无权限访问(403)，请检查账号权限或模型权限")
-        raise RuntimeError(f"多模态识别请求失败，HTTP {status_code}")
+            raise RuntimeError("VLM识别无权限访问(403)，请检查账号权限或模型权限")
+        raise RuntimeError(f"VLM识别请求失败，HTTP {status_code}")
 
     s, e = content.find('{'), content.rfind('}') + 1
     if s == -1:
-        raise RuntimeError("多模态识别返回内容缺少 JSON 数据")
+        raise RuntimeError("VLM识别返回内容缺少 JSON 数据")
     try:
         data = json.loads(content[s:e])
     except Exception:
-        raise RuntimeError("多模态识别返回格式无法解析，请稍后重试")
+        raise RuntimeError("VLM识别返回格式无法解析，请稍后重试")
     
     blocks = data.get("blocks", [])
     

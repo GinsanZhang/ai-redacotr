@@ -18,7 +18,7 @@ from PyQt6.QtGui import (
 )
 from .config import CONFIG, STYLESHEET
 from .utils import dev_log
-from .core import detect_by_rules, detect_by_ai, detect_by_cloud_vision, apply_mosaic
+from .core import detect_by_rules, detect_by_ai, detect_by_vlm, apply_mosaic
 
 MOUSE_LEFT = Qt.MouseButton.LeftButton
 CURSOR_CROSS = Qt.CursorShape.CrossCursor
@@ -51,12 +51,12 @@ class ProcessWorker(QThread):
         try:
             timings, self.total_start = {}, time.time()
             self.signals.progress_value.emit(5)
-            self.signals.progress.emit("多模态识别中...")
+            self.signals.progress.emit("VLM识别中...")
             s1 = time.time()
-            result = detect_by_cloud_vision(self.image_cv, self.signals.progress.emit, include_sensitive=True)
+            result = detect_by_vlm(self.image_cv, self.signals.progress.emit, include_sensitive=True)
             ocr = result.get("ocr_blocks", [])
             cloud_hits = result.get("sensitive_hits", [])
-            timings["多模态识别"] = time.time() - s1
+            timings["VLM识别"] = time.time() - s1
             self.signals.progress_value.emit(55)
             self.signals.progress.emit("规则匹配中...")
             s2 = time.time()

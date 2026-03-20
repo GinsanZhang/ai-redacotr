@@ -157,7 +157,7 @@ class MainWindow(QMainWindow):
         self.strength_slider.valueChanged.connect(self._on_strength_changed)
         layout.addWidget(self.strength_slider)
         
-        layout.addWidget(self._section("AI 识别模式"))
+        layout.addWidget(self._section("识别模式"))
         self.ai_mode_combo = QComboBox()
         self.ai_mode_combo.setObjectName("comboBox")
         self.ai_mode_combo.addItem("🚀 快速模式", "fast")
@@ -168,18 +168,18 @@ class MainWindow(QMainWindow):
         else:
             self.ai_mode_combo.setCurrentIndex(0)  # 快速模式
         self.ai_mode_combo.setToolTip(
-            "🚀 快速模式：多模态识别 + 规则匹配\n"
+            "🚀 快速模式：VLM识别 + 规则匹配\n"
             "   适合：手机号、身份证等格式清晰的敏感信息\n"
             "   耗时：10-20秒\n\n"
-            "🔍 深度模式：多模态识别 + 规则 + 大模型语义分析\n"
-            "   适合：姓名、地址等需要语义理解的敏感信息\n" 
+            "🔍 深度模式：VLM识别 + 规则 + LLM语义分析\n"
+            "   适合：姓名、地址等需要语义理解的敏感信息\n"
             "   耗时：30-60秒"
         )
         self.ai_mode_combo.currentIndexChanged.connect(self._on_ai_mode_changed)
         layout.addWidget(self.ai_mode_combo)
         
-        layout.addWidget(self._section("模型信息"))
-        model_info_text = f"多模态模型: {CONFIG['cloud_vision_model']}\nAI 大模型: {CONFIG['llm_model']}"
+        layout.addWidget(self._section("VLM & LLM 模型"))
+        model_info_text = f"VLM模型: {CONFIG['vlm_model']}\nLLM: {CONFIG['llm_model']}"
         self.model_info_label = QLabel(model_info_text, objectName="modelInfoLabel", wordWrap=True)
         self.model_info_label.setStyleSheet("""
             QLabel#modelInfoLabel {

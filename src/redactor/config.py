@@ -9,12 +9,12 @@ CONFIG = {
     "llm_model": os.getenv("LLM_MODEL", "Pro/moonshotai/Kimi-K2.5"),
     "llm_timeout": int(os.getenv("LLM_TIMEOUT", "180")),
     "llm_retries": int(os.getenv("LLM_RETRIES", "2")),
-    "cloud_vision_api_url": os.getenv("CLOUD_VISION_API_URL", "https://api.siliconflow.cn/v1/chat/completions"),
-    "cloud_vision_api_key": os.getenv("CLOUD_VISION_API_KEY", _LLM_KEY),
-    "cloud_vision_model": os.getenv("CLOUD_VISION_MODEL", "Qwen/Qwen3-VL-32B-Instruct"),
-    "cloud_vision_timeout": int(os.getenv("CLOUD_VISION_TIMEOUT", "180")),
-    "cloud_vision_retries": int(os.getenv("CLOUD_VISION_RETRIES", "1")),
-    "cloud_image_max_side": 1800,
+    "vlm_api_url": os.getenv("VLM_API_URL", "https://api.siliconflow.cn/v1/chat/completions"),
+    "vlm_api_key": os.getenv("VLM_API_KEY", _LLM_KEY),
+    "vlm_model": os.getenv("VLM_MODEL", "Qwen/Qwen3-VL-32B-Instruct"),
+    "vlm_timeout": int(os.getenv("VLM_TIMEOUT", "180")),
+    "vlm_retries": int(os.getenv("VLM_RETRIES", "1")),
+    "vlm_image_max_side": 1800,
     "mosaic_style": "blur",   # blur | block | pixel
     "mosaic_strength": 20,    # 马赛克强度
     "ai_enabled": False,       # 是否启用AI识别（默认快速模式）
