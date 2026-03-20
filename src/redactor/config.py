@@ -1,32 +1,86 @@
 import os
 import sys
+import json
+from pathlib import Path
 
-# 基础配置
+def get_config_dir() -> Path:
+    return Path(__file__).parent.parent.parent / "config"
+
+def get_default_models_config() -> dict:
+    return {
+        "vlm_models": {
+            "default": "Qwen/Qwen3-VL-32B-Instruct",
+            "models": [{"id": "Qwen/Qwen3-VL-32B-Instruct", "name": "Qwen3-VL 32B", "supports_thinking": True}]
+        },
+        "llm_models": {
+            "default": "Pro/moonshotai/Kimi-K2.5",
+            "models": [{"id": "Pro/moonshotai/Kimi-K2.5", "name": "Kimi K2.5"}]
+        }
+    }
+
+def load_models_config() -> dict:
+    config_path = get_config_dir() / "models.json"
+    if config_path.exists():
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return get_default_models_config()
+
+def load_user_settings() -> dict:
+    settings_path = get_config_dir() / "user_settings.json"
+    if settings_path.exists():
+        try:
+            with open(settings_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def save_user_settings(settings: dict):
+    config_dir = get_config_dir()
+    config_dir.mkdir(exist_ok=True)
+    settings_path = config_dir / "user_settings.json"
+    with open(settings_path, "w", encoding="utf-8") as f:
+        json.dump(settings, f, ensure_ascii=False, indent=2)
+
+_models_config = load_models_config()
+_user_settings = load_user_settings()
+
 _LLM_KEY = os.getenv("LLM_API_KEY", "")
+
 CONFIG = {
     "llm_api_url": os.getenv("LLM_API_URL", "https://api.siliconflow.cn/v1/chat/completions"),
-    "llm_api_key": _LLM_KEY,  # 强烈建议通过环境变量 LLM_API_KEY 设置
-    "llm_model": os.getenv("LLM_MODEL", "Pro/moonshotai/Kimi-K2.5"),
+    "llm_api_key": _LLM_KEY,
+    "llm_model": _user_settings.get("llm_model") or os.getenv("LLM_MODEL") or _models_config["llm_models"]["default"],
     "llm_timeout": int(os.getenv("LLM_TIMEOUT", "180")),
     "llm_retries": int(os.getenv("LLM_RETRIES", "2")),
     "vlm_api_url": os.getenv("VLM_API_URL", "https://api.siliconflow.cn/v1/chat/completions"),
     "vlm_api_key": os.getenv("VLM_API_KEY", _LLM_KEY),
-    "vlm_model": os.getenv("VLM_MODEL", "Qwen/Qwen3-VL-32B-Instruct"),
+    "vlm_model": _user_settings.get("vlm_model") or os.getenv("VLM_MODEL") or _models_config["vlm_models"]["default"],
     "vlm_timeout": int(os.getenv("VLM_TIMEOUT", "180")),
     "vlm_retries": int(os.getenv("VLM_RETRIES", "1")),
     "vlm_image_max_side": 1800,
-    "vlm_mode": "fast",       # VLM识别模式: fast|deep (默认快速)
-    "mosaic_style": "blur",   # blur | block | pixel
-    "mosaic_strength": 20,    # 马赛克强度
-    "ai_enabled": False,       # 是否启用LLM识别（默认不启用）
-    "deep_ai_enabled": False,  # 是否启用深度AI识别（默认关闭，快速模式）
+    "vlm_mode": _user_settings.get("vlm_mode", "fast"),
+    "mosaic_style": "blur",
+    "mosaic_strength": 20,
+    "ai_enabled": _user_settings.get("llm_enabled", False),
+    "deep_ai_enabled": False,
     "hotkey": "ctrl+shift+s",
     "debug_log": os.getenv("DEBUG_LOG", "1") == "1",
     "debug_log_request_body": os.getenv("DEBUG_LOG_REQUEST_BODY", "1") == "1",
     "debug_log_max_chars": int(os.getenv("DEBUG_LOG_MAX_CHARS", "2000")),
+    "vlm_models": _models_config["vlm_models"]["models"],
+    "llm_models": _models_config["llm_models"]["models"],
 }
 
-# 敏感信息正则规则
+def get_model_supports_thinking(model_id: str) -> bool:
+    for model in CONFIG.get("vlm_models", []):
+        if model["id"] == model_id:
+            return model.get("supports_thinking", False)
+    return False
+
 PATTERNS = {
     "手机号":         r"(?<!\d)1[3-9]\d{9}(?!\d)",
     "身份证":         r"\d{17}[\dXx]",
@@ -49,7 +103,6 @@ VALID_LABELS = [
 ]
 LABEL_DELIMITERS = ['：', ': ', ':', ' - ', '-', '——', '—', ' ', '  ']
 
-# UI 样式表
 STYLESHEET = """
 QMainWindow, QWidget {
     background: #0d0d12;

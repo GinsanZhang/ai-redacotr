@@ -69,6 +69,7 @@ def summarize_payload_for_log(payload: dict) -> dict:
         "max_tokens": payload.get("max_tokens"),
         "temperature": payload.get("temperature"),
         "stream": payload.get("stream", False),
+        "enable_thinking": payload.get("enable_thinking"),
         "messages": []
     }
     for msg in payload.get("messages", []):

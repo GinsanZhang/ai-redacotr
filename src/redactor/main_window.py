@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QImage, QKeySequence, QShortcut
 
-from .config import CONFIG, STYLESHEET
+from .config import CONFIG, STYLESHEET, save_user_settings, get_model_supports_thinking
 from .ui import AnnotationCanvas, ScreenshotSelector, pil_to_cv
 
 ALIGN_CENTER = Qt.AlignmentFlag.AlignCenter
@@ -157,13 +157,14 @@ class MainWindow(QMainWindow):
         self.strength_slider.valueChanged.connect(self._on_strength_changed)
         layout.addWidget(self.strength_slider)
         
+        # 视觉识别模式章节
         layout.addWidget(self._section("视觉识别模式"))
         self.vlm_mode_combo = QComboBox()
-        self.vlm_mode_combo.setObjectName("comboBox")
+        self.vlm_mode_combo.setObjectName("combo")
         self.vlm_mode_combo.addItem("🚀 快速", "fast")
         self.vlm_mode_combo.addItem("🔍 深度", "deep")
-        # 根据配置设置当前选项（默认快速）
-        self.vlm_mode_combo.setCurrentIndex(0)
+        vlm_mode_idx = 0 if CONFIG.get("vlm_mode", "fast") == "fast" else 1
+        self.vlm_mode_combo.setCurrentIndex(vlm_mode_idx)
         self.vlm_mode_combo.setToolTip(
             "🚀 快速：关闭VLM深度思考，OCR速度更快\n"
             "🔍 深度：开启VLM深度思考，识别更精准\n"
@@ -174,42 +175,55 @@ class MainWindow(QMainWindow):
         self.vlm_mode_combo.currentIndexChanged.connect(self._on_vlm_mode_changed)
         layout.addWidget(self.vlm_mode_combo)
         
+        # VLM模型下拉框
+        layout.addWidget(QLabel("VLM模型", objectName="smallLabel"))
+        self.vlm_model_combo = QComboBox()
+        self.vlm_model_combo.setObjectName("combo")
+        for model in CONFIG.get("vlm_models", []):
+            self.vlm_model_combo.addItem(model["name"], model["id"])
+        idx = self.vlm_model_combo.findData(CONFIG["vlm_model"])
+        if idx >= 0:
+            self.vlm_model_combo.setCurrentIndex(idx)
+        self.vlm_model_combo.currentIndexChanged.connect(self._on_vlm_model_changed)
+        layout.addWidget(self.vlm_model_combo)
+        
+        # 敏感信息识别章节
         layout.addWidget(self._section("敏感信息识别"))
         self.rule_checkbox = QCheckBox("启用规则匹配")
         self.rule_checkbox.setObjectName("checkbox")
-        self.rule_checkbox.setChecked(True)  # 默认启用
+        self.rule_checkbox.setChecked(_get_user_setting("rule_enabled", True))
         self.rule_checkbox.setToolTip(
             "基于正则表达式识别格式清晰的敏感信息\n"
             "- 手机号、身份证号等，速度极快\n"
             "- 对格式清晰的信息准确率很高\n"
         )
+        self.rule_checkbox.stateChanged.connect(self._on_checkbox_changed)
         layout.addWidget(self.rule_checkbox)
         
         self.llm_checkbox = QCheckBox("启用LLM语义识别")
         self.llm_checkbox.setObjectName("checkbox")
-        self.llm_checkbox.setChecked(CONFIG.get("ai_enabled", False))  # 默认不启用
+        self.llm_checkbox.setChecked(_get_user_setting("llm_enabled", False))
         self.llm_checkbox.setToolTip(
             "使用LLM进行语义分析识别敏感信息\n"
             "- 识别姓名、地址等需要理解的敏感信息\n"
             "- 准确率更高，但会增加识别时间\n"
         )
+        self.llm_checkbox.stateChanged.connect(self._on_checkbox_changed)
         layout.addWidget(self.llm_checkbox)
         
-        layout.addWidget(self._section("VLM & LLM 模型"))
-        model_info_text = f"VLM模型: {CONFIG['vlm_model']}\nLLM: {CONFIG['llm_model']}"
-        self.model_info_label = QLabel(model_info_text, objectName="modelInfoLabel", wordWrap=True)
-        self.model_info_label.setStyleSheet("""
-            QLabel#modelInfoLabel {
-                color: #64748b;
-                font-size: 11px;
-                line-height: 1.6;
-                background: #0d0d12;
-                border-radius: 8px;
-                padding: 10px;
-            }
-        """)
-        layout.addWidget(self.model_info_label)
+        # LLM模型下拉框
+        layout.addWidget(QLabel("LLM模型", objectName="smallLabel"))
+        self.llm_model_combo = QComboBox()
+        self.llm_model_combo.setObjectName("combo")
+        for model in CONFIG.get("llm_models", []):
+            self.llm_model_combo.addItem(model["name"], model["id"])
+        idx = self.llm_model_combo.findData(CONFIG["llm_model"])
+        if idx >= 0:
+            self.llm_model_combo.setCurrentIndex(idx)
+        self.llm_model_combo.currentIndexChanged.connect(self._on_llm_model_changed)
+        layout.addWidget(self.llm_model_combo)
         
+        # 处理进度章节
         layout.addWidget(self._section("处理进度"))
         self.progress_bar = QProgressBar(objectName="progressBar")
         self.progress_bar.setRange(0, 100)
@@ -295,11 +309,10 @@ class MainWindow(QMainWindow):
         self.stats_label.setText("处理中...")
         self.progress_bar.setValue(0)
         self.timing_label.setText("耗时: 0.0s")
-        # 启动计时器
         self.recognition_start_time = time.time()
         self.elapsed_timer = QTimer(self)
         self.elapsed_timer.timeout.connect(self._update_elapsed_time)
-        self.elapsed_timer.start(100)  # 每100ms更新一次
+        self.elapsed_timer.start(100)
         self.worker = ProcessWorker(self.current_cv)
         self.worker.signals.progress.connect(self.progress_label.setText)
         self.worker.signals.progress_value.connect(self.progress_bar.setValue)
@@ -308,13 +321,11 @@ class MainWindow(QMainWindow):
         self.worker.start()
 
     def _update_elapsed_time(self):
-        """更新已用时间显示"""
         if self.recognition_start_time:
             elapsed = time.time() - self.recognition_start_time
             self.timing_label.setText(f"耗时: {elapsed:.1f}s")
 
     def _on_process_finished(self, ocr, hits, timings):
-        # 停止计时器
         if self.elapsed_timer:
             self.elapsed_timer.stop()
             self.elapsed_timer = None
@@ -330,7 +341,6 @@ class MainWindow(QMainWindow):
         self.status.showMessage("处理完成")
 
     def _on_process_error(self, msg):
-        # 停止计时器
         if self.elapsed_timer:
             self.elapsed_timer.stop()
             self.elapsed_timer = None
@@ -375,12 +385,35 @@ class MainWindow(QMainWindow):
         self.canvas._render()
 
     def _on_vlm_mode_changed(self, idx):
-        """处理VLM模式切换"""
-        # 保存VLM模式到CONFIG（预留，后续使用）
         mode = self.vlm_mode_combo.currentData()
         CONFIG["vlm_mode"] = mode
+        self._save_user_settings()
 
-    def _on_ai_mode_changed(self, idx):
-        """处理AI识别模式切换（兼容旧代码）"""
-        # 现在由独立控件控制，此函数保留但不使用
-        pass
+    def _on_vlm_model_changed(self, idx):
+        model_id = self.vlm_model_combo.currentData()
+        CONFIG["vlm_model"] = model_id
+        self._save_user_settings()
+        self.status.showMessage(f"VLM模型已切换为: {self.vlm_model_combo.currentText()}")
+
+    def _on_llm_model_changed(self, idx):
+        model_id = self.llm_model_combo.currentData()
+        CONFIG["llm_model"] = model_id
+        self._save_user_settings()
+        self.status.showMessage(f"LLM模型已切换为: {self.llm_model_combo.currentText()}")
+
+    def _on_checkbox_changed(self):
+        self._save_user_settings()
+
+    def _save_user_settings(self):
+        settings = {
+            "vlm_model": CONFIG["vlm_model"],
+            "llm_model": CONFIG["llm_model"],
+            "vlm_mode": CONFIG.get("vlm_mode", "fast"),
+            "rule_enabled": self.rule_checkbox.isChecked(),
+            "llm_enabled": self.llm_checkbox.isChecked()
+        }
+        save_user_settings(settings)
+
+def _get_user_setting(key, default):
+    from .config import load_user_settings
+    return load_user_settings().get(key, default)

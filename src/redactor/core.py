@@ -5,31 +5,8 @@ import time
 import cv2
 import numpy as np
 import requests
-from .config import CONFIG, PATTERNS, VALID_LABELS, LABEL_DELIMITERS
+from .config import CONFIG, PATTERNS, VALID_LABELS, LABEL_DELIMITERS, get_model_supports_thinking
 from .utils import dev_log, mask_secret, summarize_payload_for_log
-
-# 支持enable_thinking的模型列表
-VLM_MODELS_SUPPORT_THINKING = [
-    "Pro/zai-org/GLM-5",
-    "Pro/zai-org/GLM-4.7",
-    "deepseek-ai/DeepSeek-V3.2",
-    "Pro/deepseek-ai/DeepSeek-V3.2",
-    "zai-org/GLM-4.6",
-    "Qwen/Qwen3-8B",
-    "Qwen/Qwen3-14B",
-    "Qwen/Qwen3-32B",
-    "Qwen/Qwen3-30B-A3B",
-    "tencent/Hunyuan-A13B-Instruct",
-    "zai-org/GLM-4.5V",
-    "deepseek-ai/DeepSeek-V3.1-Terminus",
-    "Pro/deepseek-ai/DeepSeek-V3.1-Terminus",
-    "Qwen/Qwen3.5-397B-A17B",
-    "Qwen/Qwen3.5-122B-A10B",
-    "Qwen/Qwen3.5-35B-A3B",
-    "Qwen/Qwen3.5-27B",
-    "Qwen/Qwen3.5-9B",
-    "Qwen/Qwen3.5-4B",
-]
 
 
 def split_label_value(text: str) -> tuple:
@@ -342,15 +319,14 @@ def detect_by_vlm(image: np.ndarray, progress_cb=None, include_sensitive=False, 
     else:
         prompt = "你是一个高精度的 OCR 助手。请识别图片中所有的文字块。重要：bbox 坐标必须是基于图片尺寸归一化到 [0, 1000] 范围内的整数。格式：{\"blocks\":[{\"text\":\"...\",\"bbox\":[xmin,ymin,xmax,ymax]}]}"
     
-    # 构建请求体（使用模型默认参数，不手动调整）
     body = {
         "model": CONFIG["vlm_model"],
         "messages": [{"role": "user", "content": [{"type":"text", "text":prompt}, {"type":"image_url", "image_url":{"url":f"data:image/jpeg;base64,{b64}"}}]}],
     }
     
-    # enable_thinking仅在深度模式且模型支持时才传递
-    if vlm_mode == "deep" and CONFIG["vlm_model"] in VLM_MODELS_SUPPORT_THINKING:
-        body["enable_thinking"] = True
+    # enable_thinking 仅在模型支持时才传递
+    if get_model_supports_thinking(CONFIG["vlm_model"]):
+        body["enable_thinking"] = (vlm_mode == "deep")
     
     content, status_code = request_chat_stream_content(
         CONFIG["vlm_api_url"], CONFIG["vlm_api_key"],

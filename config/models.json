@@ -1,0 +1,20 @@
+{
+  "vlm_models": {
+    "default": "Qwen/Qwen3-VL-32B-Instruct",
+    "models": [
+      {"id": "Qwen/Qwen3-VL-32B-Instruct", "name": "Qwen3-VL 32B", "supports_thinking": false},
+       {"id": "Qwen/Qwen3.5-4B", "name": "Qwen3.5 4B", "supports_thinking": true},
+       {"id": "Qwen/Qwen3.5-9B", "name": "Qwen3.5 9B", "supports_thinking": true},
+       {"id": "Qwen/Qwen3.5-27B", "name": "Qwen3.5 27B", "supports_thinking": true}
+    ]
+  },
+  "llm_models": {
+    "default": "Pro/moonshotai/Kimi-K2.5",
+    "models": [
+      {"id": "Pro/moonshotai/Kimi-K2.5", "name": "Kimi K2.5"},
+      {"id": "deepseek-ai/DeepSeek-V3", "name": "DeepSeek V3"},
+      {"id": "Qwen/Qwen3-32B", "name": "Qwen3 32B"},
+      {"id": "Pro/deepseek-ai/DeepSeek-V3", "name": "DeepSeek V3 (Pro)"}
+    ]
+  }
+}
