@@ -15,9 +15,10 @@ CONFIG = {
     "vlm_timeout": int(os.getenv("VLM_TIMEOUT", "180")),
     "vlm_retries": int(os.getenv("VLM_RETRIES", "1")),
     "vlm_image_max_side": 1800,
+    "vlm_mode": "fast",       # VLM识别模式: fast|deep (默认快速)
     "mosaic_style": "blur",   # blur | block | pixel
     "mosaic_strength": 20,    # 马赛克强度
-    "ai_enabled": False,       # 是否启用AI识别（默认快速模式）
+    "ai_enabled": False,       # 是否启用LLM识别（默认不启用）
     "deep_ai_enabled": False,  # 是否启用深度AI识别（默认关闭，快速模式）
     "hotkey": "ctrl+shift+s",
     "debug_log": os.getenv("DEBUG_LOG", "1") == "1",

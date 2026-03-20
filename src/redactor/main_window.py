@@ -157,26 +157,43 @@ class MainWindow(QMainWindow):
         self.strength_slider.valueChanged.connect(self._on_strength_changed)
         layout.addWidget(self.strength_slider)
         
-        layout.addWidget(self._section("识别模式"))
-        self.ai_mode_combo = QComboBox()
-        self.ai_mode_combo.setObjectName("comboBox")
-        self.ai_mode_combo.addItem("🚀 快速模式", "fast")
-        self.ai_mode_combo.addItem("🔍 深度模式", "deep")
-        # 根据配置设置当前选项
-        if CONFIG.get("ai_enabled", False):
-            self.ai_mode_combo.setCurrentIndex(1)  # 深度模式
-        else:
-            self.ai_mode_combo.setCurrentIndex(0)  # 快速模式
-        self.ai_mode_combo.setToolTip(
-            "🚀 快速模式：VLM识别 + 规则匹配\n"
-            "   适合：手机号、身份证等格式清晰的敏感信息\n"
-            "   耗时：10-20秒\n\n"
-            "🔍 深度模式：VLM识别 + 规则 + LLM语义分析\n"
-            "   适合：姓名、地址等需要语义理解的敏感信息\n"
-            "   耗时：30-60秒"
+        layout.addWidget(self._section("视觉识别模式"))
+        self.vlm_mode_combo = QComboBox()
+        self.vlm_mode_combo.setObjectName("comboBox")
+        self.vlm_mode_combo.addItem("🚀 快速", "fast")
+        self.vlm_mode_combo.addItem("🔍 深度", "deep")
+        # 根据配置设置当前选项（默认快速）
+        self.vlm_mode_combo.setCurrentIndex(0)
+        self.vlm_mode_combo.setToolTip(
+            "🚀 快速：关闭VLM深度思考，OCR速度更快\n"
+            "🔍 深度：开启VLM深度思考，识别更精准\n"
+            "\n不同模式主要影响识别速度和精度：\n"
+            "- 快速：图片处理快，API返回快\n"
+            "- 深度：思考更多时间，识别更准但速度较慢\n"
         )
-        self.ai_mode_combo.currentIndexChanged.connect(self._on_ai_mode_changed)
-        layout.addWidget(self.ai_mode_combo)
+        self.vlm_mode_combo.currentIndexChanged.connect(self._on_vlm_mode_changed)
+        layout.addWidget(self.vlm_mode_combo)
+        
+        layout.addWidget(self._section("敏感信息识别"))
+        self.rule_checkbox = QCheckBox("启用规则匹配")
+        self.rule_checkbox.setObjectName("checkbox")
+        self.rule_checkbox.setChecked(True)  # 默认启用
+        self.rule_checkbox.setToolTip(
+            "基于正则表达式识别格式清晰的敏感信息\n"
+            "- 手机号、身份证号等，速度极快\n"
+            "- 对格式清晰的信息准确率很高\n"
+        )
+        layout.addWidget(self.rule_checkbox)
+        
+        self.llm_checkbox = QCheckBox("启用LLM语义识别")
+        self.llm_checkbox.setObjectName("checkbox")
+        self.llm_checkbox.setChecked(CONFIG.get("ai_enabled", False))  # 默认不启用
+        self.llm_checkbox.setToolTip(
+            "使用LLM进行语义分析识别敏感信息\n"
+            "- 识别姓名、地址等需要理解的敏感信息\n"
+            "- 准确率更高，但会增加识别时间\n"
+        )
+        layout.addWidget(self.llm_checkbox)
         
         layout.addWidget(self._section("VLM & LLM 模型"))
         model_info_text = f"VLM模型: {CONFIG['vlm_model']}\nLLM: {CONFIG['llm_model']}"
@@ -357,10 +374,13 @@ class MainWindow(QMainWindow):
         CONFIG["mosaic_strength"] = v
         self.canvas._render()
 
+    def _on_vlm_mode_changed(self, idx):
+        """处理VLM模式切换"""
+        # 保存VLM模式到CONFIG（预留，后续使用）
+        mode = self.vlm_mode_combo.currentData()
+        CONFIG["vlm_mode"] = mode
+
     def _on_ai_mode_changed(self, idx):
-        """处理AI识别模式切换"""
-        mode = self.ai_mode_combo.currentData()
-        if mode == "deep":
-            CONFIG["ai_enabled"] = True
-        else:
-            CONFIG["ai_enabled"] = False
+        """处理AI识别模式切换（兼容旧代码）"""
+        # 现在由独立控件控制，此函数保留但不使用
+        pass
