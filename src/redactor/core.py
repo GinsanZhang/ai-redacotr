@@ -576,6 +576,7 @@ def recognize_chunk(args) -> dict:
     crop_y2 = min(image.shape[0], int(max_y + padding))
     
     cropped = image[crop_y1:crop_y2, crop_x1:crop_x2]
+    crop_h, crop_w = cropped.shape[:2]
     dev_log(f"Chunk {chunk_idx}: 裁剪尺寸 {cropped.shape} 原图 {image.shape} 偏移 ({crop_x1},{crop_y1})")
     
     if progress_cb:
@@ -583,11 +584,22 @@ def recognize_chunk(args) -> dict:
     
     result = detect_by_vlm(cropped, None, include_sensitive=True)
     
+    crop_scale = min(1.0, 1800.0 / max(crop_h, crop_w))
+    if crop_scale < 1.0:
+        scaled_w, scaled_h = int(crop_w * crop_scale), int(crop_h * crop_scale)
+    else:
+        scaled_w, scaled_h = crop_w, crop_h
+    
     offset_blocks = []
     offset_hits = []
     
     for block in result.get("ocr_blocks", []):
         bx1, by1, bx2, by2 = block["bbox"]
+        if crop_scale < 1.0:
+            bx1 = int(bx1 * crop_w / scaled_w)
+            by1 = int(by1 * crop_h / scaled_h)
+            bx2 = int(bx2 * crop_w / scaled_w)
+            by2 = int(by2 * crop_h / scaled_h)
         offset_blocks.append({
             "text": block["text"],
             "bbox": [bx1 + crop_x1, by1 + crop_y1, bx2 + crop_x1, by2 + crop_y1],
@@ -597,6 +609,15 @@ def recognize_chunk(args) -> dict:
     for hit in result.get("sensitive_hits", []):
         hx1, hy1, hx2, hy2 = hit.get("sensitive_bbox", hit["bbox"])
         sx1, sy1, sx2, sy2 = hit["bbox"]
+        if crop_scale < 1.0:
+            hx1 = int(hx1 * crop_w / scaled_w)
+            hy1 = int(hy1 * crop_h / scaled_h)
+            hx2 = int(hx2 * crop_w / scaled_w)
+            hy2 = int(hy2 * crop_h / scaled_h)
+            sx1 = int(sx1 * crop_w / scaled_w)
+            sy1 = int(sy1 * crop_h / scaled_h)
+            sx2 = int(sx2 * crop_w / scaled_w)
+            sy2 = int(sy2 * crop_h / scaled_h)
         offset_hits.append({
             "bbox": [sx1 + crop_x1, sy1 + crop_y1, sx2 + crop_x1, sy2 + crop_y1],
             "sensitive_bbox": [hx1 + crop_x1, hy1 + crop_y1, hx2 + crop_x1, hy2 + crop_y1],
