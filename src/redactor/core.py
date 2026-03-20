@@ -5,8 +5,15 @@ import time
 import cv2
 import numpy as np
 import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from .config import CONFIG, PATTERNS, VALID_LABELS, LABEL_DELIMITERS, get_model_supports_thinking
 from .utils import dev_log, mask_secret, summarize_payload_for_log
+
+LIGHTWEIGHT_PROMPT = """你是一个快速的 OCR 助手。
+请识别图片中所有的文字块。
+只需要返回文字内容和位置，不需要分析敏感信息。
+bbox 坐标归一化到 [0, 1000]。
+格式：{"blocks":[{"text":"文字","bbox":[xmin,ymin,xmax,ymax]}]}"""
 
 
 def split_label_value(text: str) -> tuple:
@@ -445,3 +452,239 @@ def apply_mosaic(image: np.ndarray, bbox: list, style: str = "blur", strength: i
     elif style == "block":
         image[y1:y2, x1:x2] = 0
     return image
+
+
+def prepare_lightweight_image(image: np.ndarray, max_size: int = 1024, quality: int = 75) -> tuple:
+    """准备轻量识别用的图像"""
+    h, w = image.shape[:2]
+    scale = min(1.0, max_size / max(h, w))
+    resized = cv2.resize(image, (int(w * scale), int(h * scale))) if scale < 1.0 else image
+    ok, buf = cv2.imencode(".jpg", resized, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+    if not ok:
+        return "", w, h
+    b64 = base64.b64encode(buf.tobytes()).decode("utf-8")
+    return b64, resized.shape[1], resized.shape[0]
+
+
+def step1_lightweight_recognition(image: np.ndarray, progress_cb=None) -> list:
+    """Step 1: 轻量 VLM 快速全景识别"""
+    light_model = CONFIG.get("vlm_lightweight_model", "Qwen/Qwen3-VL-8B-Instruct")
+    parallel_cfg = CONFIG.get("parallel_config", {})
+    
+    b64, new_w, new_h = prepare_lightweight_image(
+        image,
+        max_size=parallel_cfg.get("lightweight_image_size", 1024),
+        quality=parallel_cfg.get("jpeg_quality_lightweight", 75)
+    )
+    if not b64:
+        return []
+    
+    if progress_cb:
+        progress_cb("Step1: 轻量模型全景识别中...")
+    
+    body = {
+        "model": light_model,
+        "messages": [{"role": "user", "content": [
+            {"type": "text", "text": LIGHTWEIGHT_PROMPT},
+            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}}
+        ]}]
+    }
+    
+    content, status_code = request_chat_stream_content(
+        CONFIG["vlm_api_url"], CONFIG["vlm_api_key"],
+        body, CONFIG["vlm_timeout"], "Step1轻量识别", progress_cb
+    )
+    
+    if status_code != 200:
+        dev_log(f"Step1轻量识别失败: {status_code}", "ERROR")
+        return []
+    
+    try:
+        s, e = content.find('{'), content.rfind('}') + 1
+        if s == -1:
+            return []
+        data = json.loads(content[s:e])
+        blocks = data.get("blocks", [])
+        
+        result = []
+        for b in blocks:
+            text_raw, bbox = str(b.get("text", "")), b.get("bbox", [])
+            if not text_raw or len(bbox) != 4:
+                continue
+            text = text_raw.strip()
+            nx1, ny1, nx2, ny2 = [float(v) for v in bbox]
+            x1, y1 = int(nx1 * new_w / 1000.0), int(ny1 * new_h / 1000.0)
+            x2, y2 = int(nx2 * new_w / 1000.0), int(ny2 * new_h / 1000.0)
+            result.append({
+                "text": text,
+                "bbox": [max(0, x1), max(0, y1), min(new_w, x2), min(new_h, y2)],
+                "conf": float(b.get("conf", 1.0))
+            })
+        return result
+    except Exception as e:
+        dev_log(f"Step1解析失败: {e}", "ERROR")
+        return []
+
+
+def step2_smart_chunking(blocks: list, max_per_chunk: int = 20, row_threshold: int = 20) -> list:
+    """Step 2: 智能分块（按行分组）"""
+    if not blocks:
+        return []
+    
+    sorted_blocks = sorted(blocks, key=lambda b: b["bbox"][1])
+    
+    rows = []
+    current_row = [sorted_blocks[0]]
+    
+    for block in sorted_blocks[1:]:
+        y = block["bbox"][1]
+        prev_y = current_row[-1]["bbox"][1]
+        if y - prev_y > row_threshold:
+            rows.append(current_row)
+            current_row = [block]
+        else:
+            current_row.append(block)
+    rows.append(current_row)
+    
+    chunks = []
+    for row in rows:
+        if len(row) <= max_per_chunk:
+            chunks.append(row)
+        else:
+            sub_chunks = [row[i:i+max_per_chunk] for i in range(0, len(row), max_per_chunk)]
+            chunks.extend(sub_chunks)
+    
+    return chunks
+
+
+def recognize_chunk(args) -> dict:
+    """识别单个chunk（供线程池调用）"""
+    image, chunk_blocks, chunk_idx, progress_cb = args
+    
+    min_x = min(b["bbox"][0] for b in chunk_blocks)
+    min_y = min(b["bbox"][1] for b in chunk_blocks)
+    max_x = max(b["bbox"][2] for b in chunk_blocks)
+    max_y = max(b["bbox"][3] for b in chunk_blocks)
+    
+    padding = 10
+    crop_x1 = max(0, int(min_x - padding))
+    crop_y1 = max(0, int(min_y - padding))
+    crop_x2 = min(image.shape[1], int(max_x + padding))
+    crop_y2 = min(image.shape[0], int(max_y + padding))
+    
+    cropped = image[crop_y1:crop_y2, crop_x1:crop_x2]
+    
+    if progress_cb:
+        progress_cb(f"区域 {chunk_idx + 1} 识别中...")
+    
+    result = detect_by_vlm(cropped, None, include_sensitive=True)
+    
+    offset_blocks = []
+    offset_hits = []
+    
+    for block in result.get("ocr_blocks", []):
+        bx1, by1, bx2, by2 = block["bbox"]
+        offset_blocks.append({
+            "text": block["text"],
+            "bbox": [bx1 + crop_x1, by1 + crop_y1, bx2 + crop_x1, by2 + crop_y1],
+            "conf": block["conf"]
+        })
+    
+    for hit in result.get("sensitive_hits", []):
+        hx1, hy1, hx2, hy2 = hit.get("sensitive_bbox", hit["bbox"])
+        sx1, sy1, sx2, sy2 = hit["bbox"]
+        offset_hits.append({
+            "bbox": [sx1 + crop_x1, sy1 + crop_y1, sx2 + crop_x1, sy2 + crop_y1],
+            "sensitive_bbox": [hx1 + crop_x1, hy1 + crop_y1, hx2 + crop_x1, hy2 + crop_y1],
+            "label": hit.get("label", "敏感信息"),
+            "text": hit["text"],
+            "source": hit.get("source", "ai")
+        })
+    
+    return {
+        "chunk_idx": chunk_idx,
+        "ocr_blocks": offset_blocks,
+        "sensitive_hits": offset_hits
+    }
+
+
+def step3_parallel_recognition(image: np.ndarray, chunks: list, progress_cb=None) -> list:
+    """Step 3: 并行详细识别"""
+    parallel_cfg = CONFIG.get("parallel_config", {})
+    max_workers = parallel_cfg.get("max_workers", 20)
+    
+    if progress_cb:
+        progress_cb(f"开始并行识别 {len(chunks)} 个区域...")
+    
+    tasks = [(image, chunk, i, progress_cb) for i, chunk in enumerate(chunks)]
+    all_results = []
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(recognize_chunk, task): task[2] for task in tasks}
+        
+        for future in as_completed(futures):
+            try:
+                result = future.result()
+                all_results.append(result)
+                if progress_cb:
+                    progress_cb(f"区域 {result['chunk_idx'] + 1} 完成")
+            except Exception as e:
+                dev_log(f"Chunk识别失败: {e}", "ERROR")
+    
+    all_results.sort(key=lambda r: r["chunk_idx"])
+    return all_results
+
+
+def step4_merge_results(all_results: list) -> dict:
+    """Step 4: 合并结果"""
+    ocr_blocks = []
+    sensitive_hits = []
+    
+    for result in all_results:
+        ocr_blocks.extend(result.get("ocr_blocks", []))
+        sensitive_hits.extend(result.get("sensitive_hits", []))
+    
+    ocr_blocks.sort(key=lambda b: (b["bbox"][1], b["bbox"][0]))
+    
+    return {
+        "ocr_blocks": ocr_blocks,
+        "sensitive_hits": sensitive_hits
+    }
+
+
+def detect_by_vlm_parallel(image: np.ndarray, progress_cb=None) -> dict:
+    """分块并行 VLM 识别主函数"""
+    parallel_cfg = CONFIG.get("parallel_config", {})
+    
+    if progress_cb:
+        progress_cb("开始分块并行识别...")
+    
+    blocks = step1_lightweight_recognition(image, progress_cb)
+    if not blocks:
+        dev_log("Step1轻量识别无结果，回退到单次识别", "WARNING")
+        return detect_by_vlm(image, progress_cb, include_sensitive=True)
+    
+    if progress_cb:
+        progress_cb(f"Step1完成，识别到 {len(blocks)} 个文字块，开始分块...")
+    
+    chunks = step2_smart_chunking(
+        blocks,
+        max_per_chunk=parallel_cfg.get("max_blocks_per_chunk", 20),
+        row_threshold=parallel_cfg.get("row_threshold", 20)
+    )
+    
+    if progress_cb:
+        progress_cb(f"分块完成，共 {len(chunks)} 个区域，开始并行识别...")
+    
+    all_results = step3_parallel_recognition(image, chunks, progress_cb)
+    
+    if not all_results or len(all_results) < len(chunks) * 0.5:
+        dev_log("并行识别结果过少，回退到单次识别", "WARNING")
+        return detect_by_vlm(image, progress_cb, include_sensitive=True)
+    
+    merged = step4_merge_results(all_results)
+    
+    if progress_cb:
+        progress_cb(f"识别完成：{len(merged['ocr_blocks'])} 个文字块，{len(merged['sensitive_hits'])} 个敏感区域")
+    
+    return merged

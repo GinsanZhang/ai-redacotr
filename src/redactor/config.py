@@ -73,6 +73,9 @@ CONFIG = {
     "debug_log_max_chars": int(os.getenv("DEBUG_LOG_MAX_CHARS", "2000")),
     "vlm_models": _models_config["vlm_models"]["models"],
     "llm_models": _models_config["llm_models"]["models"],
+    "vlm_lightweight_model": _models_config["vlm_models"].get("lightweight", "Qwen/Qwen3-VL-8B-Instruct"),
+    "parallel_enabled": _models_config.get("parallel_config", {}).get("enabled", True),
+    "parallel_config": _models_config.get("parallel_config", {}),
 }
 
 def get_model_supports_thinking(model_id: str) -> bool:

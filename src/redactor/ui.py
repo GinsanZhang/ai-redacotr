@@ -18,7 +18,7 @@ from PyQt6.QtGui import (
 )
 from .config import CONFIG, STYLESHEET
 from .utils import dev_log
-from .core import detect_by_rules, detect_by_ai, detect_by_vlm, apply_mosaic
+from .core import detect_by_rules, detect_by_ai, detect_by_vlm, detect_by_vlm_parallel, apply_mosaic
 
 MOUSE_LEFT = Qt.MouseButton.LeftButton
 CURSOR_CROSS = Qt.CursorShape.CrossCursor
@@ -53,9 +53,12 @@ class ProcessWorker(QThread):
             self.signals.progress_value.emit(5)
             self.signals.progress.emit("VLM识别中...")
             s1 = time.time()
-            # 获取当前VLM模式，调用VLM识别
             vlm_mode = CONFIG.get("vlm_mode", "fast")
-            result = detect_by_vlm(self.image_cv, self.signals.progress.emit, include_sensitive=True, vlm_mode=vlm_mode)
+            parallel_enabled = CONFIG.get("parallel_enabled", True)
+            if parallel_enabled:
+                result = detect_by_vlm_parallel(self.image_cv, self.signals.progress.emit)
+            else:
+                result = detect_by_vlm(self.image_cv, self.signals.progress.emit, include_sensitive=True, vlm_mode=vlm_mode)
             ocr = result.get("ocr_blocks", [])
             cloud_hits = result.get("sensitive_hits", [])
             timings["VLM识别"] = time.time() - s1
