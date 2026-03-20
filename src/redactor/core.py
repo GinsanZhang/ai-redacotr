@@ -509,14 +509,21 @@ def step1_lightweight_recognition(image: np.ndarray, progress_cb=None) -> list:
         if '|' in content:
             parts = content.split('|')
             for part in parts:
-                coords = [c.strip() for c in part.split(',')]
+                if ':' in part:
+                    label, coords_str = part.split(':', 1)
+                    label = label.strip()
+                    coords = [c.strip() for c in coords_str.split(',')]
+                else:
+                    label = ""
+                    coords = [c.strip() for c in part.split(',')]
+                
                 if len(coords) == 4:
                     try:
                         nx1, ny1, nx2, ny2 = [float(c) for c in coords]
                         x1, y1 = int(nx1 * orig_w / 1000.0), int(ny1 * orig_h / 1000.0)
                         x2, y2 = int(nx2 * orig_w / 1000.0), int(ny2 * orig_h / 1000.0)
                         result.append({
-                            "text": "",
+                            "text": label,
                             "bbox": [max(0, x1), max(0, y1), min(orig_w, x2), min(orig_h, y2)],
                             "conf": 1.0
                         })
