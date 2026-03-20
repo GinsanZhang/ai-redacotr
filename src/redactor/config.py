@@ -28,6 +28,10 @@ def load_models_config() -> dict:
             pass
     return get_default_models_config()
 
+def get_step1_prompt() -> str:
+    config = load_models_config()
+    return config.get("parallel_config", {}).get("step1_prompt", "")
+
 def load_user_settings() -> dict:
     settings_path = get_config_dir() / "user_settings.json"
     if settings_path.exists():

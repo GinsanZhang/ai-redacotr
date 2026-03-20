@@ -3,21 +3,25 @@
     "default": "Qwen/Qwen3-VL-32B-Instruct",
     "lightweight": "Qwen/Qwen3-VL-32B-Instruct",
     "models": [
-      {"id": "Qwen/Qwen3-VL-32B-Instruct", "name": "Qwen3-VL 32B", "supports_thinking": false},
-      {"id": "Qwen/Qwen3-VL-8B-Instruct", "name": "Qwen3-VL 8B", "supports_thinking": false},
-      {"id": "Qwen/Qwen3-VL-8B-Thinking", "name": "Qwen3-VL 8B-Thinking", "supports_thinking": false},
-      {"id": "Qwen/Qwen3.5-4B", "name": "Qwen3.5 4B", "supports_thinking": true},
-       {"id": "Qwen/Qwen3.5-9B", "name": "Qwen3.5 9B", "supports_thinking": true},
-       {"id": "Qwen/Qwen3.5-27B", "name": "Qwen3.5 27B", "supports_thinking": true}
+      {
+        "id": "Qwen/Qwen3-VL-32B-Instruct",
+        "name": "Qwen3-VL 32B",
+        "supports_thinking": false
+      },
+      {
+        "id": "Qwen/Qwen3-VL-8B-Instruct",
+        "name": "Qwen3-VL 8B",
+        "supports_thinking": false
+      }
     ]
   },
   "llm_models": {
     "default": "Pro/moonshotai/Kimi-K2.5",
     "models": [
-      {"id": "Pro/moonshotai/Kimi-K2.5", "name": "Kimi K2.5"},
-      {"id": "deepseek-ai/DeepSeek-V3", "name": "DeepSeek V3"},
-      {"id": "Qwen/Qwen3-32B", "name": "Qwen3 32B"},
-      {"id": "Pro/deepseek-ai/DeepSeek-V3", "name": "DeepSeek V3 (Pro)"}
+      {
+        "id": "Pro/moonshotai/Kimi-K2.5",
+        "name": "Kimi K2.5"
+      }
     ]
   },
   "parallel_config": {
@@ -28,6 +32,7 @@
     "detailed_image_size": 1280,
     "jpeg_quality_lightweight": 75,
     "jpeg_quality_detailed": 80,
-    "row_threshold": 20
+    "row_threshold": 20,
+    "step1_prompt": "你是一个图像区域分割助手。请将图片中包含文字的区域分割成若干个大块（每块包含1-3行文字）。不需要识别具体文字内容，只需要给出每个大块的位置区域。bbox坐标归一化到[0,1000]。格式：{\"blocks\":[{\"text\":\"文字区域\",\"bbox\":[xmin,ymin,xmax,ymax]}]}注意：分割越少越好，每个块可以包含多行文字。"
   }
 }

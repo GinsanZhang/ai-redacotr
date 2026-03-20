@@ -6,10 +6,12 @@ import cv2
 import numpy as np
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from .config import CONFIG, PATTERNS, VALID_LABELS, LABEL_DELIMITERS, get_model_supports_thinking
+from .config import CONFIG, PATTERNS, VALID_LABELS, LABEL_DELIMITERS, get_model_supports_thinking, get_step1_prompt
 from .utils import dev_log, mask_secret, summarize_payload_for_log
 
-LIGHTWEIGHT_PROMPT = """你是一个图像区域分割助手。
+def get_lightweight_prompt() -> str:
+    prompt = get_step1_prompt()
+    return prompt if prompt else """你是一个图像区域分割助手。
 请将图片中包含文字的区域分割成若干个大块（每块包含1-3行文字）。
 不需要识别具体文字内容，只需要给出每个大块的位置区域。
 bbox 坐标归一化到 [0, 1000]。
@@ -486,7 +488,7 @@ def step1_lightweight_recognition(image: np.ndarray, progress_cb=None) -> list:
     body = {
         "model": light_model,
         "messages": [{"role": "user", "content": [
-            {"type": "text", "text": LIGHTWEIGHT_PROMPT},
+            {"type": "text", "text": get_lightweight_prompt()},
             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}}
         ]}]
     }
