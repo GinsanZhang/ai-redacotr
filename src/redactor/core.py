@@ -458,15 +458,15 @@ def apply_mosaic(image: np.ndarray, bbox: list, style: str = "blur", strength: i
 
 
 def prepare_lightweight_image(image: np.ndarray, max_size: int = 1024, quality: int = 75) -> tuple:
-    """准备轻量识别用的图像"""
-    h, w = image.shape[:2]
-    scale = min(1.0, max_size / max(h, w))
-    resized = cv2.resize(image, (int(w * scale), int(h * scale))) if scale < 1.0 else image
+    """准备轻量识别用的图像，返回 (base64, 缩放后宽, 缩放后高, 原图宽, 原图高, 缩放比例)"""
+    orig_h, orig_w = image.shape[:2]
+    scale = min(1.0, max_size / max(orig_h, orig_w))
+    resized = cv2.resize(image, (int(orig_w * scale), int(orig_h * scale))) if scale < 1.0 else image
     ok, buf = cv2.imencode(".jpg", resized, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
     if not ok:
-        return "", w, h
+        return "", orig_w, orig_h, orig_w, orig_h, 1.0
     b64 = base64.b64encode(buf.tobytes()).decode("utf-8")
-    return b64, resized.shape[1], resized.shape[0]
+    return b64, resized.shape[1], resized.shape[0], orig_w, orig_h, scale
 
 
 def step1_lightweight_recognition(image: np.ndarray, progress_cb=None) -> list:
@@ -474,7 +474,7 @@ def step1_lightweight_recognition(image: np.ndarray, progress_cb=None) -> list:
     light_model = CONFIG.get("vlm_lightweight_model", "Qwen/Qwen3-VL-8B-Instruct")
     parallel_cfg = CONFIG.get("parallel_config", {})
     
-    b64, new_w, new_h = prepare_lightweight_image(
+    b64, new_w, new_h, orig_w, orig_h, scale = prepare_lightweight_image(
         image,
         max_size=parallel_cfg.get("lightweight_image_size", 1024),
         quality=parallel_cfg.get("jpeg_quality_lightweight", 75)
@@ -516,11 +516,11 @@ def step1_lightweight_recognition(image: np.ndarray, progress_cb=None) -> list:
                 continue
             text = text_raw.strip()
             nx1, ny1, nx2, ny2 = [float(v) for v in bbox]
-            x1, y1 = int(nx1 * new_w / 1000.0), int(ny1 * new_h / 1000.0)
-            x2, y2 = int(nx2 * new_w / 1000.0), int(ny2 * new_h / 1000.0)
+            x1, y1 = int(nx1 * orig_w / 1000.0), int(ny1 * orig_h / 1000.0)
+            x2, y2 = int(nx2 * orig_w / 1000.0), int(ny2 * orig_h / 1000.0)
             result.append({
                 "text": text,
-                "bbox": [max(0, x1), max(0, y1), min(new_w, x2), min(new_h, y2)],
+                "bbox": [max(0, x1), max(0, y1), min(orig_w, x2), min(orig_h, y2)],
                 "conf": float(b.get("conf", 1.0))
             })
         return result
