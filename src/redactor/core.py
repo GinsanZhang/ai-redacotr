@@ -576,6 +576,7 @@ def recognize_chunk(args) -> dict:
     crop_y2 = min(image.shape[0], int(max_y + padding))
     
     cropped = image[crop_y1:crop_y2, crop_x1:crop_x2]
+    dev_log(f"Chunk {chunk_idx}: 裁剪尺寸 {cropped.shape} 原图 {image.shape} 偏移 ({crop_x1},{crop_y1})")
     
     if progress_cb:
         progress_cb(f"区域 {chunk_idx + 1} 识别中...")
