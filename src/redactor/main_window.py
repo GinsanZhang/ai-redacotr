@@ -133,6 +133,12 @@ class MainWindow(QMainWindow):
         self.btn_recognize.clicked.connect(self._start_recognition)
         layout.addWidget(self.btn_recognize)
         
+        self.btn_test_step1 = QPushButton("🧪 测试分割")
+        self.btn_test_step1.setObjectName("btnSecondary")
+        self.btn_test_step1.setEnabled(False)
+        self.btn_test_step1.clicked.connect(self._test_step1)
+        layout.addWidget(self.btn_test_step1)
+        
         return bar
 
     def _make_right_panel(self):
@@ -295,6 +301,7 @@ class MainWindow(QMainWindow):
         self.progress_bar.setValue(0)
         self.timing_label.setText("阶段耗时：-")
         self.btn_recognize.setEnabled(True)
+        self.btn_test_step1.setEnabled(True)
         self.btn_recognize.setText("🔍 识别")
         self.status.showMessage("图片已加载，点击「开始识别」进行识别")
 
@@ -319,6 +326,42 @@ class MainWindow(QMainWindow):
         self.worker.signals.finished.connect(self._on_process_finished)
         self.worker.signals.error.connect(self._on_process_error)
         self.worker.start()
+
+    def _test_step1(self):
+        if self.current_cv is None:
+            return
+        from .ui import ProcessWorker
+        self.btn_recognize.setEnabled(False)
+        self.btn_test_step1.setEnabled(False)
+        self.btn_test_step1.setText("测试中...")
+        self.progress_bar.setValue(0)
+        self.timing_label.setText("耗时: 0.0s")
+        self.recognition_start_time = time.time()
+        self.elapsed_timer = QTimer(self)
+        self.elapsed_timer.timeout.connect(self._update_elapsed_time)
+        self.elapsed_timer.start(100)
+        self.worker = ProcessWorker(self.current_cv, test_step1_only=True)
+        self.worker.signals.progress.connect(self.progress_label.setText)
+        self.worker.signals.progress_value.connect(self.progress_bar.setValue)
+        self.worker.signals.finished.connect(self._on_test_step1_finished)
+        self.worker.signals.error.connect(self._on_process_error)
+        self.worker.start()
+
+    def _on_test_step1_finished(self, blocks, hits, timings):
+        if self.elapsed_timer:
+            self.elapsed_timer.stop()
+            self.elapsed_timer = None
+        self.canvas.load_image(self.current_cv, [])
+        for block in blocks:
+            self.canvas.add_block(block["bbox"], block.get("text", ""))
+        self.btn_recognize.setEnabled(True)
+        self.btn_test_step1.setEnabled(True)
+        self.btn_test_step1.setText("🧪 测试分割")
+        self.progress_bar.setValue(100)
+        self.progress_label.setText(f"分割完成: {len(blocks)} 个区域")
+        self.stats_label.setText(f"Step1分割区域: {len(blocks)}")
+        self.timing_label.setText(f"耗时: {timings.get('总耗时', 0):.2f}s")
+        self.status.showMessage("分割完成，区域已标记到图上")
 
     def _update_elapsed_time(self):
         if self.recognition_start_time:

@@ -18,7 +18,7 @@ from PyQt6.QtGui import (
 )
 from .config import CONFIG, STYLESHEET
 from .utils import dev_log
-from .core import detect_by_rules, detect_by_ai, detect_by_vlm, detect_by_vlm_parallel, apply_mosaic
+from .core import detect_by_rules, detect_by_ai, detect_by_vlm, detect_by_vlm_parallel, apply_mosaic, step1_lightweight_recognition
 
 MOUSE_LEFT = Qt.MouseButton.LeftButton
 CURSOR_CROSS = Qt.CursorShape.CrossCursor
@@ -43,12 +43,19 @@ class ProcessSignals(QObject):
     progress, progress_value, finished, error, elapsed_time = pyqtSignal(str), pyqtSignal(int), pyqtSignal(list, list, dict), pyqtSignal(str), pyqtSignal(float)
 
 class ProcessWorker(QThread):
-    def __init__(self, image_cv: np.ndarray):
+    def __init__(self, image_cv: np.ndarray, test_step1_only: bool = False):
         super().__init__()
         self.image_cv, self.signals = image_cv, ProcessSignals()
         self.total_start = None
+        self.test_step1_only = test_step1_only
     def run(self):
         try:
+            if self.test_step1_only:
+                self.signals.progress.emit("Step1: 区域分割测试...")
+                blocks = step1_lightweight_recognition(self.image_cv, self.signals.progress.emit)
+                self.signals.finished.emit(blocks, [], {"Step1分割": time.time() - time.time()})
+                return
+            
             timings, self.total_start = {}, time.time()
             self.signals.progress_value.emit(5)
             self.signals.progress.emit("VLM识别中...")
@@ -110,6 +117,15 @@ class AnnotationCanvas(QLabel):
             "source": h.get("source","rule")
         } for h in hits]
         self._fit_and_render()
+
+    def add_block(self, bbox: list, text: str = ""):
+        self.regions.append({
+            "bbox": bbox,
+            "sensitive_bbox": bbox,
+            "label": text,
+            "source": "test"
+        })
+        self._render()
 
     def _fit_and_render(self):
         if self.original_cv is None: return

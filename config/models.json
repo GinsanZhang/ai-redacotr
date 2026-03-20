@@ -1,7 +1,7 @@
 {
   "vlm_models": {
     "default": "Qwen/Qwen3-VL-32B-Instruct",
-    "lightweight": "Qwen/Qwen3.5-4B",
+    "lightweight": "Qwen/Qwen3-VL-32B-Instruct",
     "models": [
       {"id": "Qwen/Qwen3-VL-32B-Instruct", "name": "Qwen3-VL 32B", "supports_thinking": false},
       {"id": "Qwen/Qwen3-VL-8B-Instruct", "name": "Qwen3-VL 8B", "supports_thinking": false},
