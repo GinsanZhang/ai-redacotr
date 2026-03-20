@@ -503,26 +503,43 @@ def step1_lightweight_recognition(image: np.ndarray, progress_cb=None) -> list:
         return []
     
     try:
-        s, e = content.find('{'), content.rfind('}') + 1
-        if s == -1:
-            return []
-        data = json.loads(content[s:e])
-        blocks = data.get("blocks", [])
-        
         result = []
-        for b in blocks:
-            text_raw, bbox = str(b.get("text", "")), b.get("bbox", [])
-            if not text_raw or len(bbox) != 4:
-                continue
-            text = text_raw.strip()
-            nx1, ny1, nx2, ny2 = [float(v) for v in bbox]
-            x1, y1 = int(nx1 * orig_w / 1000.0), int(ny1 * orig_h / 1000.0)
-            x2, y2 = int(nx2 * orig_w / 1000.0), int(ny2 * orig_h / 1000.0)
-            result.append({
-                "text": text,
-                "bbox": [max(0, x1), max(0, y1), min(orig_w, x2), min(orig_h, y2)],
-                "conf": float(b.get("conf", 1.0))
-            })
+        content = content.strip()
+        
+        if '|' in content:
+            parts = content.split('|')
+            for part in parts:
+                coords = [c.strip() for c in part.split(',')]
+                if len(coords) == 4:
+                    try:
+                        nx1, ny1, nx2, ny2 = [float(c) for c in coords]
+                        x1, y1 = int(nx1 * orig_w / 1000.0), int(ny1 * orig_h / 1000.0)
+                        x2, y2 = int(nx2 * orig_w / 1000.0), int(ny2 * orig_h / 1000.0)
+                        result.append({
+                            "text": "",
+                            "bbox": [max(0, x1), max(0, y1), min(orig_w, x2), min(orig_h, y2)],
+                            "conf": 1.0
+                        })
+                    except:
+                        pass
+        else:
+            s, e = content.find('{'), content.rfind('}') + 1
+            if s != -1:
+                data = json.loads(content[s:e])
+                blocks = data.get("blocks", [])
+                for b in blocks:
+                    text_raw, bbox = str(b.get("text", "")), b.get("bbox", [])
+                    if not text_raw or len(bbox) != 4:
+                        continue
+                    text = text_raw.strip()
+                    nx1, ny1, nx2, ny2 = [float(v) for v in bbox]
+                    x1, y1 = int(nx1 * orig_w / 1000.0), int(ny1 * orig_h / 1000.0)
+                    x2, y2 = int(nx2 * orig_w / 1000.0), int(ny2 * orig_h / 1000.0)
+                    result.append({
+                        "text": text,
+                        "bbox": [max(0, x1), max(0, y1), min(orig_w, x2), min(orig_h, y2)],
+                        "conf": float(b.get("conf", 1.0))
+                    })
         return result
     except Exception as e:
         dev_log(f"Step1解析失败: {e}", "ERROR")
