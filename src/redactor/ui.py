@@ -160,11 +160,12 @@ class AnnotationCanvas(QLabel):
                 ptr.setBrush(QBrush(col))
                 fm = ptr.fontMetrics()
                 tw, th = fm.horizontalAdvance(lbl) + 8, fm.height() + 4
-                # Draw label at the right side outside of the block
-                label_x = x2
-                label_y = max(y2, y1 + th - 4)
-                ptr.drawRect(label_x, label_y - th, tw, th)
-                ptr.drawText(label_x + 4, label_y - 3, lbl)
+                # Draw label at center of the block
+                box_w, box_h = x2 - x1, y2 - y1
+                label_x = x1 + (box_w - tw) // 2
+                label_y = y1 + (box_h - th) // 2
+                ptr.drawRect(label_x, label_y, tw, th)
+                ptr.drawText(label_x + 4, label_y + th - 4, lbl)
         if self.drag_start and self.drag_current:
             x1, y1 = min(self.drag_start.x(), self.drag_current.x()), min(self.drag_start.y(), self.drag_current.y())
             x2, y2 = max(self.drag_start.x(), self.drag_current.x()), max(self.drag_start.y(), self.drag_current.y())
