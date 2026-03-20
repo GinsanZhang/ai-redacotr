@@ -9,11 +9,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from .config import CONFIG, PATTERNS, VALID_LABELS, LABEL_DELIMITERS, get_model_supports_thinking
 from .utils import dev_log, mask_secret, summarize_payload_for_log
 
-LIGHTWEIGHT_PROMPT = """你是一个快速的 OCR 助手。
-请识别图片中所有的文字块。
-只需要返回文字内容和位置，不需要分析敏感信息。
+LIGHTWEIGHT_PROMPT = """你是一个图像区域分割助手。
+请将图片中包含文字的区域分割成若干个大块（每块包含1-3行文字）。
+不需要识别具体文字内容，只需要给出每个大块的位置区域。
 bbox 坐标归一化到 [0, 1000]。
-格式：{"blocks":[{"text":"文字","bbox":[xmin,ymin,xmax,ymax]}]}"""
+格式：{"blocks":[{"text":"文字区域","bbox":[xmin,ymin,xmax,ymax]}]}
+注意：分割越少越好，每个块可以包含多行文字。"""
 
 
 def split_label_value(text: str) -> tuple:
