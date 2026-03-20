@@ -1,7 +1,7 @@
 {
-  "vlm_model": "Qwen/Qwen3-VL-32B-Instruct",
+  "vlm_model": "Qwen/Qwen3-VL-8B-Thinking",
   "llm_model": "Pro/moonshotai/Kimi-K2.5",
-  "vlm_mode": "deep",
+  "vlm_mode": "fast",
   "rule_enabled": true,
   "llm_enabled": false
 }
