@@ -530,11 +530,11 @@ def step1_lightweight_recognition(image: np.ndarray, progress_cb=None) -> list:
 
 
 def step2_smart_chunking(blocks: list, max_per_chunk: int = 20, row_threshold: int = 20) -> list:
-    """Step 2: 智能分块（按行分组）"""
+    """Step 2: 智能分块（每个布局区域作为一个 chunk）"""
     if not blocks:
         return []
     
-    sorted_blocks = sorted(blocks, key=lambda b: b["bbox"][1])
+    sorted_blocks = sorted(blocks, key=lambda b: (b["bbox"][1], b["bbox"][0]))
     
     rows = []
     current_row = [sorted_blocks[0]]
