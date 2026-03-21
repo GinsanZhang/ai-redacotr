@@ -470,10 +470,58 @@ def prepare_lightweight_image(image: np.ndarray, max_size: int = 1024, quality: 
 
 
 def step1_lightweight_recognition(image: np.ndarray, progress_cb=None) -> list:
-    """Step 1: 轻量 VLM 快速全景识别"""
+    """Step 1: 轻量 OCR/VLM 快速全景识别"""
     light_model = CONFIG.get("vlm_lightweight_model", "Qwen/Qwen3-VL-8B-Instruct")
     parallel_cfg = CONFIG.get("parallel_config", {})
     
+    if progress_cb:
+        progress_cb("Step1: 轻量模型全景识别中...")
+    
+    if light_model.startswith("PaddlePaddle/"):
+        return step1_paddleocr_recognition(image, progress_cb)
+    
+    return step1_vlm_recognition(image, light_model, parallel_cfg, progress_cb)
+
+
+def step1_paddleocr_recognition(image: np.ndarray, progress_cb=None) -> list:
+    """使用 PaddleOCR 进行 Step1 识别"""
+    try:
+        from paddleocr import PaddleOCR
+    except ImportError:
+        dev_log("PaddleOCR 未安装，回退到VLM识别", "WARNING")
+        return step1_vlm_recognition(image, CONFIG.get("vlm_lightweight_model"), CONFIG.get("parallel_config", {}), progress_cb)
+    
+    ocr = PaddleOCR(use_angle_cls=True, lang='ch', show_log=False)
+    result = ocr.ocr(image, cls=True)
+    
+    if not result or not result[0]:
+        return []
+    
+    orig_h, orig_w = image.shape[:2]
+    blocks = []
+    
+    for line in result[0]:
+        if line and len(line) >= 2:
+            box = line[0]
+            x_coords = [p[0] for p in box]
+            y_coords = [p[1] for p in box]
+            x1, x2 = int(min(x_coords)), int(max(x_coords))
+            y1, y2 = int(min(y_coords)), int(max(y_coords))
+            x1 = int(x1 * 1000 / orig_w)
+            y1 = int(y1 * 1000 / orig_h)
+            x2 = int(x2 * 1000 / orig_w)
+            y2 = int(y2 * 1000 / orig_h)
+            blocks.append({
+                "text": f"OCR{len(blocks)+1}",
+                "bbox": [x1, y1, x2, y2],
+                "conf": 1.0
+            })
+    
+    return blocks
+
+
+def step1_vlm_recognition(image: np.ndarray, light_model: str, parallel_cfg: dict, progress_cb=None) -> list:
+    """使用 VLM API 进行 Step1 识别"""
     b64, new_w, new_h, orig_w, orig_h, scale = prepare_lightweight_image(
         image,
         max_size=parallel_cfg.get("lightweight_image_size", 1024),

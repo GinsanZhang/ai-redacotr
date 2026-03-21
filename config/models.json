@@ -1,7 +1,7 @@
 {
   "vlm_models": {
     "default": "Qwen/Qwen3-VL-32B-Instruct",
-    "lightweight": "Qwen/Qwen3-VL-32B-Instruct",
+    "lightweight": "PaddlePaddle/PaddleOCR-VL-1.5",
     "models": [
       {
         "id": "Qwen/Qwen3-VL-32B-Instruct",
@@ -33,6 +33,7 @@
     "jpeg_quality_lightweight": 75,
     "jpeg_quality_detailed": 80,
     "row_threshold": 20,
-    "step1_prompt": "你是一个图像布局分析助手。请根据图片的视觉布局结构进行分割，识别出独立的视觉区域（如表格、列、段落、图片区块等）。按布局分割，尽量保证块独立和尽量多但不要超过20个，不需要识别具体文字内容。bbox坐标归一化到[0,1000]。直接输出，格式：区域1:x1,y1,x2,y2|区域2:x1,y1,x2,y2|...。例如：区域1:100,200,300,400|区域2:500,200,700,400"
+    "step1_prompt": "你是一个图像布局分析助手。请根据图片的视觉布局结构进行分割，识别出独立的视觉区域（如表格、列、段落、图片区块等）。按布局分割，尽量保证块独立和尽量多但不要超过20个，不需要识别具体文字内容。bbox坐标归一化到[0,1000]。格式：{\"blocks\":[{\"text\":\"区域\",\"bbox\":[xmin,ymin,xmax,ymax]}]}注意：按视觉布局分割，分割越少越好，每个区域可以是多列多行。"
+
   }
 }
